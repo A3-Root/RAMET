@@ -1,0 +1,23 @@
+#ifndef AMET_SCRIPT_MOD_HPP
+#define AMET_SCRIPT_MOD_HPP
+
+#define MAINPREFIX z
+#define PREFIX root_amet
+
+#define MAJOR 1
+#define MINOR 1
+#define PATCH 0
+#define BUILD 0
+
+#define VERSION MAJOR.MINOR.PATCH.BUILD
+#define VERSION_AR MAJOR,MINOR,PATCH,BUILD
+
+#define REQUIRED_VERSION 2.20
+
+#ifdef COMPONENT_BEAUTIFIED
+    #define COMPONENT_NAME QUOTE(Root's AMET - COMPONENT_BEAUTIFIED)
+#else
+    #define COMPONENT_NAME QUOTE(Root's AMET - COMPONENT)
+#endif
+
+#endif // AMET_SCRIPT_MOD_HPP

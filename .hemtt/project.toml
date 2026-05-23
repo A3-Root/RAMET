@@ -1,0 +1,22 @@
+name = "root_amet"
+prefix = "root_amet"
+mainprefix = "z"
+author = "Root"
+folder_optionals = false
+
+[version]
+git_hash = 0
+
+[files]
+include = [
+    "mod.cpp",
+    "README.md",
+    "license.md"
+]
+exclude = [
+    ".gitignore",
+    ".editorconfig",
+    "*.md",
+    "*.json"
+]
+
