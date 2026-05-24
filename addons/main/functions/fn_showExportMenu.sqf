@@ -21,8 +21,8 @@ private _ocapAvailable = !isNil "diag_exportTerrainSVG";
 
 private _msg = format [
     "Select bulk export mode.\n\nGrad_meh available: %1\nOCAP (diag) available: %2",
-    if (_gradAvailable) then {"YES"} else {"NO — main branch needed"},
-    if (_ocapAvailable) then {"YES"} else {"NO — diagnostic branch needed"}
+    ["NO — main branch needed", "YES"] select _gradAvailable,
+    ["NO — diagnostic branch needed", "YES"] select _ocapAvailable
 ];
 
 [

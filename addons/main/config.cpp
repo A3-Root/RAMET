@@ -30,6 +30,7 @@ class Extended_PostInit_EventHandlers {
 //     and presents a single RAMET picker that delegates back to whichever mod the
 //     operator chose. Handler name is prefixed `zzz_` so it sorts AFTER both
 //     mods' ControlsBackground handlers and fires last (closes their dialog).
+class ctrlStatic;
 class RscStandardDisplay;
 class RscDisplayMain: RscStandardDisplay {
     class ControlsBackground {

@@ -7,7 +7,7 @@ ramet_exportRunning = false;
 // CBA keybind: Ctrl+Shift+R opens the picker any time.
 ["RAMET", "openExportMenu", ["Open bulk export menu", "Show the grad_meh / OCAP picker."], {
     [] call ramet_fnc_showExportMenu;
-}, {false}, [DIK_R, [false, true, true]]] call CBA_fnc_addKeybind;
+}, {false}, [19, [false, true, true]]] call CBA_fnc_addKeybind;  // 19 = DIK_R (Ctrl+Shift+R)
 
 // Auto-open the menu once after player init so the operator doesn't have to know the hotkey.
 [] spawn {

@@ -36,7 +36,7 @@ if (!_gradLoaded && !_ocapLoaded) exitWith {
     ramet_mainMenuPickerActive = false;
 };
 
-private _branchLine = if (_isDiag) then { "Branch: DIAGNOSTIC (OCAP available)" } else { "Branch: MAIN/STABLE (grad_meh available)" };
+private _branchLine = ["Branch: MAIN/STABLE (grad_meh available)", "Branch: DIAGNOSTIC (OCAP available)"] select _isDiag;
 private _msg = format [
     "Select bulk export mode.\n\n%1\n\n  • Grad_meh : main/stable branch\n  • OCAP     : diagnostic branch (uses diag_exportTerrainSVG)",
     _branchLine
