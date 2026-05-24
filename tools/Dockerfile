@@ -16,6 +16,9 @@
 # ---- Stage 1: build oxipng ----
 FROM rust:slim-bookworm AS oxipng-builder
 
+RUN apt-get update && apt-get install -y --no-install-recommends git \
+    && rm -rf /var/lib/apt/lists/*
+
 RUN git clone https://github.com/oxipng/oxipng.git /tmp/oxipng \
     && cd /tmp/oxipng \
     && cargo build --release
