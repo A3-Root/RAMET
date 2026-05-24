@@ -53,8 +53,16 @@ while {true} do {
             !(call compile "gradMehExportRunning")
         };
 
-        [_world, true, ""] call _markDone;
-        [format ["finished %1", _world]] call _log;
+        // nil = grad_meh threw (unsupported map); false = normal completion
+        private _exportOk = !(isNil { call compile "gradMehExportRunning" });
+
+        if (_exportOk) then {
+            [_world, true, ""] call _markDone;
+            [format ["finished %1", _world]] call _log;
+        } else {
+            [format ["WARN: grad_meh failed to export '%1' — unsupported map, skipping", _world]] call _log;
+            [_world, false, "grad_meh export failed — unsupported map"] call _markDone;
+        };
     };
 };
 
