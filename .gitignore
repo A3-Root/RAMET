@@ -9,23 +9,8 @@
 .hemttout
 hemtt
 hemtt.exe
-releases/**/*
-references/**/*
-
-# =========================
-# Documentation / Wiki / Text
-# =========================
-*.md
-*.txt
-*.claude
-*.claude/**/*
-*.codex
-*.codex/**/*
-!README*.md
-logs/**/*
-!batch/worlds.txt
-!docs/**/*
-!CMakeLists.txt
+releases/
+references/
 
 # =========================
 # Python
@@ -45,7 +30,7 @@ __pycache__/
 build/.env
 !.env.example
 *.code-workspace
-.vscode/**/*
+.vscode/
 .env
 
 # =========================
@@ -53,4 +38,40 @@ build/.env
 # =========================
 *.log
 *.rpt
-reference_files/**/*
+
+# =========================
+# Documentation / Wiki / Text
+# =========================
+*.md
+*.txt
+*.claude
+*.codex
+!README*.md
+logs/
+!batch/worlds.txt
+
+# =========================
+# General & Subprojects
+# =========================
+reference_files/
+subprojects/ocap-renderterrain/reference_files/
+
+# Allow git to look into the subprojects directory structure
+!subprojects/
+!subprojects/*/
+!subprojects/*/intercept/
+!subprojects/*/intercept/tools/
+!subprojects/*/intercept/rv/
+
+# =========================
+# Explicit File Whitelists
+# =========================
+# Overriding general extension blocks (.md, .txt, .exe, .dll, .json)
+!**/docs/
+!**/docs/**/*
+!**/unary_definitions.txt
+!**/colorrelief_bk.txt
+!**/CMakeUserPresets.json
+!**/intercept_x64.dll
+!**/armake_w64.exe
+!**/CMakeInclude.txt
