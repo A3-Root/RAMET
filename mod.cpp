@@ -1,0 +1,9 @@
+name = "RAMET";
+author = "Root";
+tooltip = "Root's Arma Map Export Tool";
+tooltipOwned = "Root's Arma Map Export Tool";
+actionName = "GitHub";
+action = "https://github.com/A3-Root/RAMET";
+overview = "Export Arma 3 map data in all its glory";
+hideName = 0;
+hidePicture = 0;
