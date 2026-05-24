@@ -238,10 +238,7 @@ void extractMap(const std::string &worldName, const std::string &worldPath, std:
     auto basePath = fs::path("grad_meh") / lowerWorldName;
     auto basePathGeojson = fs::path("grad_meh") / lowerWorldName / "geojson";
     auto basePathSat = fs::path("grad_meh") / lowerWorldName / "sat";
-    auto basePathTopo = fs::path("grad_meh") / lowerWorldName / "topo";
-    auto basePathTopoDark = fs::path("grad_meh") / lowerWorldName / "topo_dark";
-    auto basePathBakedTopo = fs::path("grad_meh") / lowerWorldName / "baked_topo";
-    auto basePathBakedTopoDark = fs::path("grad_meh") / lowerWorldName / "baked_topo_dark";
+    // Topo paths removed: topo rendering moved to tools/render_topo.py (Docker).
 
     std::stringstream startMsg;
     startMsg << "Starting export of " << worldName << " [";
@@ -272,22 +269,6 @@ void extractMap(const std::string &worldName, const std::string &worldPath, std:
     {
         fs::create_directories(basePathSat);
     }
-    if (!fs::exists(basePathTopo))
-    {
-        fs::create_directories(basePathTopo);
-    }
-    if (!fs::exists(basePathTopoDark))
-    {
-        fs::create_directories(basePathTopoDark);
-    }
-    if (!fs::exists(basePathBakedTopo))
-    {
-        fs::create_directories(basePathBakedTopo);
-    }
-    if (!fs::exists(basePathBakedTopoDark))
-    {
-        fs::create_directories(basePathBakedTopoDark);
-    }
 
     std::string curWorldPath = "";
     try {
@@ -301,7 +282,7 @@ void extractMap(const std::string &worldName, const std::string &worldPath, std:
         auto wrp = arma_file_formats::cxx::OprwCxx{};
         // wrp.wrpName = worldName + ".wrp";
 
-        if (steps[0] || steps[1] || steps[2] || steps[3] || steps[5] || steps[6])
+        if (steps[0] || steps[3] || steps[5] || steps[6])
         {
             reportStatus(worldName, "read_wrp", "running");
             wrp = arma_file_formats::cxx::create_wrp_from_vec(wrp_data);
@@ -321,20 +302,9 @@ void extractMap(const std::string &worldName, const std::string &worldPath, std:
             writeSatImages(wrp, worldSize, basePathSat, worldName);
             reportStatus(worldName, "write_sat", "done");
         }
-        if (steps[1])
-        {
-            reportStatus(worldName, "write_topo", "running");
-            prettyDiagLog("Exporting topographic images");
-            writeTopoImageSet(wrp, basePathTopo, basePathTopoDark);
-            reportStatus(worldName, "write_topo", "done");
-        }
-        if (steps[2])
-        {
-            reportStatus(worldName, "write_baked_topo", "running");
-            prettyDiagLog("Exporting baked topographic images");
-            writeBakedTopoImageSet(wrp, basePathBakedTopo, basePathBakedTopoDark);
-            reportStatus(worldName, "write_baked_topo", "done");
-        }
+        // Topo rendering moved to Docker (tools/render_topo.py); skip in-game.
+        if (steps[1]) { reportStatus(worldName, "write_topo", "canceled"); }
+        if (steps[2]) { reportStatus(worldName, "write_baked_topo", "canceled"); }
         if (steps[3])
         {
             reportStatus(worldName, "write_houses", "running");

@@ -4,7 +4,6 @@
 
 #include <vector>
 #include <filesystem>
-#include <execution>
 #include <tuple>
 
 #include <rust-lib/lib.h>

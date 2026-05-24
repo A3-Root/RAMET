@@ -34,6 +34,22 @@ import optimize_tiles  # noqa: E402
 import verify as verify_mod  # noqa: E402
 
 
+def _safe_import_render_sat():
+    try:
+        import render_sat
+        return render_sat
+    except Exception:
+        return None
+
+
+def _safe_import_render_topo():
+    try:
+        import render_topo
+        return render_topo
+    except Exception:
+        return None
+
+
 def _safe_import_pmtiles():
     try:
         import geojson_to_pmtiles
@@ -84,6 +100,78 @@ def process_world(world: str,
         return {"world": world, "ok": False, "reason": "no inputs"}
 
     map_json = merge_outputs.merge_world(world, grad_dir, ocap_raw_dir, ocap_rendered_dir, out_root)
+
+    world_size = map_json.get("worldSize") or 0
+    out_tiles = out_root / world / "tiles"
+    existing_variant_ids = {layer["id"] for layer in map_json.get("rasterLayers", [])}
+
+    # --- sat pyramids from grad_meh sat_full.png ---
+    if grad_dir is not None:
+        sat_full = grad_dir / "sat" / "sat_full.png"
+        if sat_full.exists() and world_size:
+            mod = _safe_import_render_sat()
+            if mod is not None:
+                try:
+                    written = mod.render(
+                        sat_full,
+                        grad_dir / "geojson",
+                        out_tiles,
+                        float(world_size),
+                    )
+                    _SAT_LABELS = {
+                        "sat": "Satellite",
+                        "sat_dark": "Satellite Dark",
+                        "baked_sat": "Baked Satellite",
+                        "baked_sat_dark": "Baked Satellite Dark",
+                    }
+                    for vid in written:
+                        if vid not in existing_variant_ids:
+                            map_json.setdefault("rasterLayers", []).append({
+                                "id": vid,
+                                "path": f"tiles/{vid}/{{z}}/{{x}}/{{y}}.png",
+                                "label": _SAT_LABELS.get(vid, vid.replace("_", " ").title()),
+                                "category": "base",
+                                "ext": "png",
+                            })
+                            existing_variant_ids.add(vid)
+                except Exception as exc:
+                    print(f"[orchestrate] {world}: render_sat failed — {exc}")
+        elif not world_size:
+            print(f"[orchestrate] {world}: worldSize missing, skipping render_sat")
+
+    # --- topo pyramids from grad_meh dem.asc.gz ---
+    if grad_dir is not None:
+        dem_path = grad_dir / "dem.asc.gz"
+        if not dem_path.exists():
+            dem_path = grad_dir / "dem.asc"
+        if dem_path.exists() and world_size:
+            mod = _safe_import_render_topo()
+            if mod is not None:
+                try:
+                    written = mod.render(
+                        dem_path,
+                        grad_dir / "geojson",
+                        out_tiles,
+                        float(world_size),
+                    )
+                    _TOPO_LABELS = {
+                        "topo": "Topographic",
+                        "topo_dark": "Topographic Dark",
+                        "baked_topo": "Baked Topographic",
+                        "baked_topo_dark": "Baked Topographic Dark",
+                    }
+                    for vid in written:
+                        if vid not in existing_variant_ids:
+                            map_json.setdefault("rasterLayers", []).append({
+                                "id": vid,
+                                "path": f"tiles/{vid}/{{z}}/{{x}}/{{y}}.png",
+                                "label": _TOPO_LABELS.get(vid, vid.replace("_", " ").title()),
+                                "category": "base",
+                                "ext": "png",
+                            })
+                            existing_variant_ids.add(vid)
+                except Exception as exc:
+                    print(f"[orchestrate] {world}: render_topo failed — {exc}")
 
     # vector / pmtiles from grad_meh geojsons
     if grad_dir is not None and not skip_pmtiles:

@@ -14,8 +14,8 @@ import shutil
 import subprocess
 from pathlib import Path
 
-WEBP_VARIANTS = {"sat", "sat_dark", "baked_sat"}
-PNG_VARIANTS = {"topo", "topo_dark", "topoRelief", "colorRelief"}
+WEBP_VARIANTS = {"sat", "sat_dark", "baked_sat", "baked_sat_dark"}
+PNG_VARIANTS = {"topo", "topo_dark", "topoRelief", "colorRelief", "baked_topo", "baked_topo_dark"}
 
 
 def _have(cmd: str) -> bool:
