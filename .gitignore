@@ -38,6 +38,7 @@ build/.env
 # =========================
 *.log
 *.rpt
+*.lock
 
 # =========================
 # Documentation / Wiki / Text
