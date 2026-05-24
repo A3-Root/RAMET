@@ -127,8 +127,8 @@ if (Test-Path $gradOut) {
         $gradDll = Find-GradMehDll -Repo $gradRepo
     }
     if ($gradDll) {
-        Copy-Item -Path $gradDll -Destination (Join-Path $stagingRoot "@grad_meh\grad_meh_x64.dll")
-        Write-Host "  + staged $gradDll -> @grad_meh\grad_meh_x64.dll" -ForegroundColor DarkGray
+        Copy-Item -Path $gradDll -Destination (Join-Path $stagingRoot "@grad_meh\intercept\grad_meh_x64.dll")
+        Write-Host "  + staged $gradDll -> @grad_meh\intercept\grad_meh_x64.dll" -ForegroundColor DarkGray
     } else {
         Write-Warning "grad_meh_x64.dll still missing after build attempt — bundle will lack native SQF commands."
     }
