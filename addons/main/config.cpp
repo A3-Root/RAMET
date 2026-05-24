@@ -26,29 +26,27 @@ class Extended_PostInit_EventHandlers {
     };
 };
 
-// --- Main-menu picker. Overrides both grad_meh's and ocap-renderterrain's auto-open
-//     and presents a single RAMET picker that delegates back to whichever mod the
-//     operator chose. Handler name is prefixed `zzz_` so it sorts AFTER both
-//     mods' ControlsBackground handlers and fires last (closes their dialog).
-class ctrlStatic;
-class RscStandardDisplay;
-class RscDisplayMain: RscStandardDisplay {
-    class ControlsBackground {
-        class zzz_ramet_onLoadHandler: ctrlStatic {
-            idc = -1;
-            x = 0; y = 0; w = 0; h = 0;
-            onLoad = "_this spawn (compile preprocessFileLineNumbers '\z\root_amet\addons\main\functions\fn_mainMenuPicker.sqf')";
-        };
-    };
-};
-
+// Two main-menu spotlight tiles — RAMET reuses the upstream mods' own dialogs.
+// Each tile directly opens the corresponding mod's existing UI; no custom
+// dialog, no auto-popup, no script. Matches the pattern grad_meh and
+// ocap-renderterrain themselves use (those tiles were stripped from the
+// subprojects so RAMET is the only entry point).
 class CfgMainMenuSpotlight {
-    class ramet_bulk {
-        text = "RAMET — Bulk Export";
+    class ramet_grad_meh {
+        text = "RAMET — Grad_meh export";
         textIsQuote = 0;
-        picture = "";
+        picture = "\x\grad_meh\addons\ui\data\spotlight_co.paa";
         video = "";
-        action = "_this spawn (compile preprocessFileLineNumbers '\z\root_amet\addons\main\functions\fn_mainMenuPicker.sqf')";
+        action = "params ['_ctrl']; (ctrlParent _ctrl) createDisplay 'grad_meh_main';";
+        actionText = "OPEN";
+        condition = "true";
+    };
+    class ramet_ocap {
+        text = "RAMET — OCAP export (diag)";
+        textIsQuote = 0;
+        picture = "\x\ocap_renderterrain\addons\ui\data\spotlight_co.paa";
+        video = "";
+        action = "params ['_ctrl']; (ctrlParent _ctrl) createDisplay 'ocap_renderterrain_main';";
         actionText = "OPEN";
         condition = "true";
     };
