@@ -1,0 +1,173 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "required": [
+        "author",
+        "displayName",
+        "elevationOffset",
+        "gridOffsetX",
+        "gridOffsetY",
+        "grids",
+        "latitude",
+        "longitude",
+        "version",
+        "worldName",
+        "worldSize"
+    ],
+    "title": "grad_meh meta.json schema",
+    "properties": {
+        "author": {
+            "type": "string",
+            "description": "Map author (corresponds to MAP_CONFIG >> \"author\").",
+            "examples": [
+                "Bohemia Interactive"
+            ]
+        },
+        "displayName": {
+            "type": "string",
+            "description": "Display name (corresponds to MAP_CONFIG >> \"description\").",
+            "examples": [
+                "Utes"
+            ]
+        },
+        "elevationOffset": {
+            "type": "number",
+            "description": "Offset (in m) of DEM values from 0 ASL (corresponds to MAP_CONFIG >> \"elevationOffset\").",
+            "examples": [
+                0.0
+            ]
+        },
+        "gridOffsetX": {
+            "type": "number",
+            "description": "Offset (in m) of grid origin in X direction. (corresponds to MAP_CONFIG >> \"Grid\" >> \"offsetX\").",
+            "examples": [
+                0.0
+            ]
+        },
+        "gridOffsetY": {
+            "type": "number",
+            "description": "Offset (in m) of grid origin in Y direction (corresponds to MAP_CONFIG >> \"Grid\" >> \"offsetY\").",
+            "examples": [
+                5120.0
+            ]
+        },
+        "grids": {
+            "type": "array",
+            "description": "Includes grids for different zoom levels.",
+            "items": { "$ref": "#/definitions/grid" }
+        },
+        "latitude": {
+            "type": "number",
+            "description": "Longitude of map (corresponds to MAP_CONFIG >> \"latitude\").",
+            "minimum": -90,
+            "maximum": 90,
+            "examples": [
+                -45.0
+            ]
+        },
+        "longitude": {
+            "type": "number",
+            "description": "Longitude of map (corresponds to MAP_CONFIG >> \"longitude\").",
+            "minimum": -180,
+            "maximum": 180,
+            "examples": [
+                30.0
+            ]
+        },
+        "colorOutside": {
+            "type": "array",
+            "description": " Outside color of map. (corresponds to MAP_CONFIG >> >> \"OutsideTerrain\" >> \"colorOutside\").",
+            "items": {
+              "type": "number",
+              "minumum": 0,
+              "maximum": 1
+            },
+            "minItems": 4,
+            "maxItems": 4,
+            "examples": [
+                [0.227451, 0.27451, 0.384314, 1]
+            ]
+        },
+        "version": {
+            "type": "string",
+            "description": "Version of grad_meh",
+            "examples": [
+                "0.1.0",
+                "2.0.0-rc.1"
+            ]
+        },
+        "worldName": {
+            "type": "string",
+            "description": "worldName of map in lowercase. Acts as an unique identifier.",
+            "examples": [
+                "utes"
+            ]
+        },
+        "worldSize": {
+            "type": "number",
+            "description": "Size of map in meters.",
+            "examples": [
+                5120
+            ]
+        }
+    },
+    "definitions": {
+        "grid": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "format",
+                "formatX",
+                "formatY",
+                "stepX",
+                "stepY",
+                "zoomMax"
+            ],
+            "properties": {
+                "format": {
+                    "type": "string",
+                    "description": "General grid format; X will be replaced by the formatted x-value and Y by the formatted y-value (corresponds to MAP_CONFIG >> \"Grid\" >> <ZOOM> >> \"format\")",
+                    "examples": [
+                        "XY"
+                    ]
+                },
+                "formatX": {
+                    "type": "string",
+                    "description": "Format of x value (corresponds to MAP_CONFIG >> \"Grid\" >> <ZOOM> >> \"formatX\")",
+                    "examples": [
+                        "000"
+                    ]
+                },
+                "formatY": {
+                    "type": "string",
+                    "description": "Format of y value (corresponds to MAP_CONFIG >> \"Grid\" >> <ZOOM> >> \"formatY\")",
+                    "examples": [
+                        "000"
+                    ]
+                },
+                "stepX": {
+                    "type": "number",
+                    "description": "Spacing between grid steps (in m) on x-axis (corresponds to MAP_CONFIG >> \"Grid\" >> <ZOOM> >> \"stepX\")",
+                    "examples": [
+                        100
+                    ]
+                },
+                "stepY": {
+                    "type": "integer",
+                    "description": "Spacing between grid steps (in m) on y-axis (corresponds to MAP_CONFIG >> \"Grid\" >> <ZOOM> >> \"stepY\")",
+                    "examples": [
+                        -100
+                    ]
+                },
+                "zoomMax": {
+                    "type": "number",
+                    "description": "Max zoom at which grid is shown (same as Arma 3 scripting command ctrlMapScale). (corresponds to MAP_CONFIG >> \"Grid\" >> <ZOOM> >> \"zoomMax\")",
+                    "examples": [
+                        0.15000000596046448
+                    ]
+                }
+            }
+        }
+    },
+    "additionalProperties": false
+}

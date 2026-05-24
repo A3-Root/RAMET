@@ -1,0 +1,27 @@
+class ocap_renderterrain_loadingStep: ctrlControlsGroupNoScrollbars {
+	x = 0;
+	y = QUOTE((5 + 0 * LOADING_STEP_H) * GRID_H);
+	w = QUOTE(LOADING_STEP_W * GRID_W);
+	h = QUOTE(LOADING_STEP_H * GRID_H);
+	idc = -1;
+	deletable = 1;
+	class Controls {
+		class done: ctrlStaticPictureKeepAspect {
+			idc = IDC_LOADINGSTEP_PICTURE;
+			x = 0;
+			y = 0;
+			w = QUOTE(LOADING_STEP_H * 0.9 * GRID_W);
+			h = QUOTE(LOADING_STEP_H * 0.9 * GRID_H);
+			text = "\a3\3den\data\controls\ctrlcheckbox\textureunchecked_ca.paa";
+		};
+		class text: ctrlStatic {
+			idc = IDC_LOADINGSTEP_TEXT;
+			x = QUOTE(LOADING_STEP_H * GRID_W);
+			y = 0;
+			w = QUOTE(safezoneW - LOADING_STEP_H * GRID_W);
+			h = QUOTE(LOADING_STEP_H * GRID_H);
+			text = "";
+			sizeEx = QUOTE(LOADING_STEP_H * 0.9 * GRID_H);
+		};
+	};
+};

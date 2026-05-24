@@ -1,0 +1,37 @@
+name = "ocap-renderterrain"
+prefix = "ocap_renderterrain"
+mainprefix = "x"
+author = "OCAP"
+folder_optionals = false
+
+[version]
+path = "addons/exporter/script_version.hpp"
+git_hash = 0
+
+[files]
+include = [
+    "mod.cpp",
+    "README.md",
+    "license.md"
+]
+exclude = [
+    ".gitignore",
+    ".editorconfig",
+    "*.md",
+    "*.json"
+]
+
+key_name = "{{prefix}}-{{version}}"
+authority = "{{version}}"
+
+releasebuild = [
+  "!copyExtension"
+]
+
+[scripts.copyExtension]
+steps_windows = [
+    'xcopy ocap-exporter\ocap_exporter_x64.dll releases\\{{version}}\@{{prefix}}\ /Y /F',
+    'xcopy ocap_renderterrain_process.bat releases\\{{version}}\@{{prefix}}\ /Y /F'
+]
+
+show_output = true

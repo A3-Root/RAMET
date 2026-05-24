@@ -1,0 +1,14 @@
+name = "OCAP RenderTerrain";
+picture = "";
+actionName = "GitHub";
+action = "https://github.com/indig0fox/ocap-renderterrain";
+description = "OCAP RenderTerrain diagnostic terrain source exporter";
+logo = "";
+logoOver = "";
+tooltip = "OCAP RenderTerrain";
+tooltipOwned = "OCAP RenderTerrain";
+overview = "Exports Arma diagnostic SVG and heightmap source data for OCAP RenderTerrain.";
+author = "OCAP";
+overviewPicture = "";
+overviewText = "OCAP RenderTerrain";
+overviewFootnote = "";

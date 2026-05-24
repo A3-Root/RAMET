@@ -1,0 +1,18 @@
+[package]
+name = "arma-file-formats-cxx"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+crate-type = ["lib", "staticlib"]
+
+[dependencies]
+arma-file-formats = { git = "https://github.com/arma-tools/arma-file-formats-rs.git", branch = "main" }
+model-mapper = "0.6.1"
+
+cxx = "1.0"
+
+anyhow = "1.0.70"
+
+[build-dependencies]
+cxx-build = "1.0"

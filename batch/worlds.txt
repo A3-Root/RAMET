@@ -1,0 +1,8 @@
+# RAMET bulk export world list. One CfgWorlds class name per line.
+# Comments (#) and blank lines ignored. Order = export order.
+# Examples:
+# altis
+# stratis
+# tanoa
+# vt7
+# enoch
