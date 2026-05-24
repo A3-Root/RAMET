@@ -1,16 +1,27 @@
 @echo off
 setlocal EnableExtensions
 
-rem RAMET step 3 — post-process intermediate exports into output/{world}/.
-rem Runs the ocap-rt Docker render, then orchestrate.py (merge + pmtiles + slice + optimize + verify).
+rem RAMET step 3 — post-process intermediate exports into <Arma3>\ramet_output\{world}\.
+rem
+rem Runs entirely in Docker — no host install of tippecanoe / pmtiles / cwebp / etc.
+rem   * ocap-rt render :  uses the upstream `ocap_renderterrain_process.bat` (its own Docker image)
+rem   * RAMET orchestrate : uses the `ramet-postprocess` image built from tools/Dockerfile
 
 set "SCRIPT_DIR=%~dp0"
 pushd "%SCRIPT_DIR%.." >nul
 set "RAMET_ROOT=%CD%"
+popd >nul
+pushd "%SCRIPT_DIR%..\.." >nul
+set "ARMA_ROOT=%CD%"
 
-rem -------- ocap-rt Docker render --------
-if exist "%RAMET_ROOT%\ocap_renderterrain_process.bat" (
-    set "OCAP_BAT=%RAMET_ROOT%\ocap_renderterrain_process.bat"
+where docker >nul 2>nul || (
+    echo [ERR] docker not on PATH — install Docker Desktop.
+    popd & exit /b 1
+)
+
+rem -------- 1) ocap-rt Docker render --------
+if exist "%ARMA_ROOT%\@ocap_renderterrain\ocap_renderterrain_process.bat" (
+    set "OCAP_BAT=%ARMA_ROOT%\@ocap_renderterrain\ocap_renderterrain_process.bat"
 ) else if exist "%RAMET_ROOT%\subprojects\ocap-renderterrain\ocap_renderterrain_process.bat" (
     set "OCAP_BAT=%RAMET_ROOT%\subprojects\ocap-renderterrain\ocap_renderterrain_process.bat"
 ) else (
@@ -24,19 +35,25 @@ if defined OCAP_BAT (
     if errorlevel 1 echo [WARN] Docker render exited with errors — continuing.
 )
 
-rem -------- orchestrate (Python) --------
-where python >nul 2>nul || (
-    echo [ERR] python not on PATH — install Python 3.11+ to run post-processing.
+rem -------- 2) RAMET orchestrate image (build once, reuse forever) --------
+echo === building ramet-postprocess image (cached after first build) ===
+docker build -t ramet-postprocess:latest -f "%RAMET_ROOT%\tools\Dockerfile" "%RAMET_ROOT%"
+if errorlevel 1 (
+    echo [ERR] docker build failed.
     popd & exit /b 1
 )
 
+rem -------- 3) Run orchestrate inside the image, mounting Arma 3 root --------
 echo === orchestrate (merge + pmtiles + slice + optimize + verify) ===
-python "%RAMET_ROOT%\tools\orchestrate.py" --all
+docker run --rm ^
+    -v "%ARMA_ROOT%":/work ^
+    -e RAMET_ARMA_ROOT=/work ^
+    ramet-postprocess:latest --all
 if errorlevel 1 (
     echo [ERR] orchestrate reported failures.
     popd & exit /b 1
 )
 
-echo === done. Output at "%RAMET_ROOT%\output". Run 04_deploy.bat to push to planner. ===
+echo === done. Output at "%ARMA_ROOT%\ramet_output". Run 04_deploy.bat to push to planner. ===
 popd
 endlocal

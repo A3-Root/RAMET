@@ -1,6 +1,6 @@
-"""Bulk-export loop control. Reads worlds.txt (in Arma3 root or RAMET/batch),
-tracks which worlds have been processed in a small JSON state file so the
-loop can resume across crashes/branch swaps.
+"""Bulk-export loop control. Reads worlds.txt (from @root_amet/batch/),
+tracks completion in <Arma3>/ramet_state/bulk_state.json so the loop can
+resume across crashes / Steam branch swaps.
 
 API (called from SQF via Archangel):
     next_world()                     -> [str]   next pending world, or "" if exhausted
@@ -22,6 +22,11 @@ def _arma_root() -> Path:
     return Path.cwd()
 
 
+def _mod_root() -> Path:
+    """<Arma3>/@root_amet (this file lives at @root_amet/ramet/bulk.py)."""
+    return Path(__file__).resolve().parents[1]
+
+
 def _state_dir() -> Path:
     d = _arma_root() / "ramet_state"
     d.mkdir(parents=True, exist_ok=True)
@@ -37,18 +42,8 @@ def _log_file() -> Path:
 
 
 def _worlds_file() -> Path | None:
-    # 1) Arma root
-    p = _arma_root() / "worlds.txt"
-    if p.exists():
-        return p
-    # 2) packaged batch/worlds.txt next to @root_amet
-    for candidate in _arma_root().glob("@*/batch/worlds.txt"):
-        return candidate
-    # 3) RAMET project tree (dev runs)
-    p = _arma_root().parent / "batch" / "worlds.txt"
-    if p.exists():
-        return p
-    return None
+    p = _mod_root() / "batch" / "worlds.txt"
+    return p if p.exists() else None
 
 
 def _load_state() -> dict:

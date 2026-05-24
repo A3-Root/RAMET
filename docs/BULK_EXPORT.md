@@ -5,16 +5,11 @@
 - Arma 3 main + diagnostic branches both installed (Steam → Properties → Betas).
 - Mods present in Arma3 root: `@root_amet`, `@grad_meh`, `@intercept`, `@CBA_A3`, `@ocap_renderterrain`.
   After `hemtt release` from RAMET root, unzip `releases/{ver}/root_amet-{ver}.zip` directly into the Arma 3 root — the bundle contains all four `@` folders, `batch/`, `tools/`, and the Docker context.
-- Docker Desktop running (for post-processing).
-- Python 3.11+ on PATH with `lxml`, `pyyaml`, `pillow`.
-- `tippecanoe`, `pmtiles` CLI on PATH (or run via Docker; orchestrate.py emits a warning and skips if missing).
-- `cwebp`, `pngquant`, `oxipng` on PATH (raster optimization is skipped layer-by-layer if missing).
+- Docker Desktop running — **only host dependency for post-processing**. All tippecanoe / pmtiles / cwebp / pngquant / oxipng / Python / lxml work runs inside the `ramet-postprocess` image (built once from `tools\Dockerfile`).
 
 ## 1. Prep
 
-Edit `batch/worlds.txt` — one CfgWorlds class name per line. Comments with `#`. The same file is consumed by both Arma passes.
-
-Copy `batch/worlds.txt` to your Arma 3 root (or the batch scripts will do it for you on first run).
+Edit `@root_amet\batch\worlds.txt` — one CfgWorlds class name per line. Comments with `#`. The same file is consumed by both Arma passes, read directly from the mod folder (nothing is dropped into the Arma 3 root).
 
 ## 2. grad_meh export (main branch)
 
@@ -42,25 +37,41 @@ Same loop pattern, this time wrapping `\z\ocap_exporter\addons\exporter\export_d
 
 After each world, `ramet.stage.move_ocap()` shifts `Arma3/ocap_exporter/{w}/` into `ramet_intermediate/ocap_rt/{w}/`. If you toggle the "kickoff Docker render" option in-game (`ramet.kickoff.run_docker(world)`), the Docker render of that world starts in a background process while Arma continues to the next world.
 
-## 5. Post-process (no Arma)
+## 5. Post-process (no Arma — all Docker)
 
 ```
 batch\03_postprocess.bat
 ```
 
-1. Runs `ocap_renderterrain_process.bat` if not already kicked off — builds the Docker image and renders any remaining worlds.
-2. Runs `python tools/orchestrate.py --all`. Per world: merge raster pyramids, build PMTiles from grad_meh GeoJSONs, slice the ocap-rt SVG into per-class layers, optimize tiles (WebP/pngquant/oxipng), write `map.json` + `source.json`, verify.
-3. Bails on any verify error so the operator sees the failure before deploying.
+1. Runs `ocap_renderterrain_process.bat` (upstream image) over `<Arma3>\ocap_exporter\` → writes `<Arma3>\ocap_renderterrain_output\{world}\`.
+2. Builds the `ramet-postprocess` image from `tools\Dockerfile` (cached after first build).
+3. Runs `docker run --rm -v <Arma3>:/work ramet-postprocess:latest --all`. Per world: merge raster pyramids, build PMTiles from grad_meh GeoJSONs, slice the ocap-rt SVG into per-class layers, optimize tiles (WebP/pngquant/oxipng), write `map.json` + `source.json`, verify. Output lands at `<Arma3>\ramet_output\{world}\`.
+4. Bails on any verify error before deploying.
 
-Re-runnable: orchestrate is idempotent per world; rerun with `--world altis` to redo just one.
+Re-runnable: orchestrate is idempotent per world. To redo just one:
+```
+docker run --rm -v <Arma3>:/work -e RAMET_ARMA_ROOT=/work ramet-postprocess:latest --world altis
+```
 
 ## 6. Deploy
+
+### 6a. Local planner (same machine)
 
 ```
 batch\04_deploy.bat
 ```
 
-Copies `output/{world}/` into `JSOC-OPS-Warlords/server/warlords/map_tiles/{world}/`. Add `--prune-legacy` to wipe planner-side maps that lack a RAMET `map.json` (be careful — verify the diff first with `--dry-run`).
+Copies `<Arma3>\ramet_output\{world}\` into `JSOC-OPS-Warlords\server\warlords\map_tiles\{world}\`. Add `--prune-legacy` to wipe planner-side maps that lack a RAMET `map.json` (verify first with `--dry-run`).
+
+### 6b. Remote planner (SFTP)
+
+```
+batch\05_zip_for_upload.bat                       :: per-world zips
+batch\05_zip_for_upload.bat --bundle              :: single bundle zip
+batch\05_zip_for_upload.bat --world altis         :: specific world(s)
+```
+
+Writes to `<Arma3>\ramet_output\_zips\`. SFTP/SCP those zips to the planner host and extract under `server/warlords/map_tiles/` — each zip contains a top-level `{world}/` dir.
 
 ## Partial-output handling
 
@@ -72,5 +83,5 @@ Copies `output/{world}/` into `JSOC-OPS-Warlords/server/warlords/map_tiles/{worl
 
 - "world mismatch" in `ramet_bulk.log` → the loop tried to process world X but Arma loaded world Y. Re-launch Arma with that world (or accept the skip; remaining worlds still process).
 - `diag_exportTerrainSVG` missing → you're on main branch, not diag. Steam beta selection.
-- Docker build OOM → set `OCAP_RENDER_DOCKER_MEMORY=24g` (default 48g) before running step 3.
-- PMTiles build fails with "tippecanoe not found" → install via WSL / scoop / Docker. orchestrate.py logs the skip and continues without `vectorSource`.
+- Docker build OOM (ocap-rt render) → set `OCAP_RENDER_DOCKER_MEMORY=24g` (default 48g) before running step 3.
+- "tippecanoe not found" inside orchestrate → the `ramet-postprocess` image is stale. Rebuild: `docker build --no-cache -t ramet-postprocess:latest -f tools\Dockerfile .` from RAMET root, or rerun `03_postprocess.bat`.

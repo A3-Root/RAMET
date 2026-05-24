@@ -11,7 +11,7 @@
  *     [] spawn ramet_fnc_bulkExportGradMeh;
  */
 
-#include "script_component.hpp"
+#include "..\script_component.hpp"
 
 if (!isServer) exitWith {};
 
@@ -31,11 +31,6 @@ private _log = {
     diag_log text format ["[RAMET grad_meh] %1", _msg];
 };
 
-private _stage = {
-    params ["_world"];
-    "archangel" callExtension ["ramet.stage.move_grad_meh", [_world]];
-};
-
 [format ["bulk grad_meh export starting (worldName=%1)", worldName]] call _log;
 
 while {true} do {
@@ -49,7 +44,7 @@ while {true} do {
 
         // gradMehExportMap [mapId, sat, topo, bakedTopo, geojson, previewImg, meta, dem]
         private _args = [_world, true, true, true, true, true, true, true];
-        private _status = call compile ("gradMehExportMap (" + str _args + ")");
+        call compile ("gradMehExportMap (" + str _args + ")");
 
         // poll until done
         waitUntil {
@@ -58,7 +53,6 @@ while {true} do {
             !(call compile "gradMehExportRunning")
         };
 
-        [_world] call _stage;
         [_world, true, ""] call _markDone;
         [format ["finished %1", _world]] call _log;
     };

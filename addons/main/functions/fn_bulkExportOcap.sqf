@@ -10,7 +10,7 @@
  *   [] spawn ramet_fnc_bulkExportOcap;
  */
 
-#include "script_component.hpp"
+#include "..\script_component.hpp"
 
 if (!isServer) exitWith {};
 
@@ -28,11 +28,6 @@ private _log = {
     params ["_msg"];
     "archangel" callExtension ["ramet.bulk.log_progress", [_msg]];
     diag_log text format ["[RAMET ocap] %1", _msg];
-};
-
-private _stage = {
-    params ["_world"];
-    "archangel" callExtension ["ramet.stage.move_ocap", [_world]];
 };
 
 private _kickDocker = {
@@ -61,7 +56,6 @@ while {true} do {
         private _exportScript = "\z\ocap_exporter\addons\exporter\export_data.sqf";
         [] call (compile preprocessFileLineNumbers _exportScript);
 
-        [_world] call _stage;
         [_world] call _kickDocker;
         [_world, true, ""] call _markDone;
         [format ["finished %1", _world]] call _log;

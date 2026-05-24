@@ -8,31 +8,34 @@ RAMET absorbs two upstream tools (`grad_meh` on Arma main branch, `ocap-renderte
 
 1. Build & install
    ```powershell
-   # one-time: in each subproject
-   cd subprojects\grad_meh             ; hemtt release ; cd ..\..
-   cd subprojects\ocap-renderterrain   ; hemtt release ; cd ..\..
-
-   # full bundle
-   hemtt release
+   .\release.ps1
    ```
-   Unzip `releases/{ver}/root_amet-{ver}.zip` into your Arma 3 root. It plants `@root_amet`, `@grad_meh`, `@ocap_renderterrain`, `batch\`, `tools\`, `ramet\`, `ocap_renderterrain\` (Docker context), and `$ARCHANGEL$`.
+   (Skip the subproject builds with `-SkipSubprojects` once they're already built. `-Clean` wipes prior `.hemttout/` and `releases/` first.)
 
-2. Edit `batch\worlds.txt` (one CfgWorlds class per line) and place it in your Arma 3 root.
+   `release.ps1` runs `hemtt check -p -Lc14 -e` then `hemtt release` in each subproject and the RAMET root, and repackages the produced zips into `releases\root_amet-{ver}-bundle.zip`. Unzip that into your Arma 3 root. Layout:
+   - `@root_amet\` — addon + `$ARCHANGEL$`, `ramet\`, `tools\`, `batch\`, `docs\`
+   - `@grad_meh\` — Intercept-based grad_meh mod
+   - `@ocap_renderterrain\` — ocap-rt addon + Docker context (`ocap_renderterrain\`) + `ocap_renderterrain_process.bat`
+
+2. Edit `@root_amet\batch\worlds.txt` (one CfgWorlds class per line). Stays in the mod folder — nothing is dropped into the Arma 3 root.
 
 3. Run the pipeline
    ```cmd
-   batch\99_full_pipeline.bat
+   @root_amet\batch\99_full_pipeline.bat
    ```
    This chains the four steps below with pauses for the one manual action (Steam branch swap).
 
 ## Pipeline at a glance
 
+All three mods (`@root_amet`, `@grad_meh`, `@ocap_renderterrain`) are loaded together in both Arma branches — the operator only swaps Steam betas between steps 1 and 2.
+
 | Step | Script                          | Branch | What it does                                                                       |
 | ---- | ------------------------------- | ------ | ---------------------------------------------------------------------------------- |
-| 1    | `batch\01_export_grad_meh.bat`  | main   | `gradMehExportMap` per world; sat + GeoJSON + DEM + preview to `ramet_intermediate\grad_meh\` |
-| 2    | `batch\02_export_ocap.bat`      | diag   | `diag_exportTerrainSVG` + ocap exporter per world to `ramet_intermediate\ocap_rt\`  |
-| 3    | `batch\03_postprocess.bat`      | —      | Docker render → `tools\orchestrate.py` (merge + PMTiles + SVG slice + WebP/pngquant + verify) |
-| 4    | `batch\04_deploy.bat`           | —      | Copy `output\{world}\` into `JSOC-OPS-Warlords\server\warlords\map_tiles\{world}\` |
+| 1    | `batch\01_export_grad_meh.bat`  | main   | `gradMehExportMap` per world → `Arma3\grad_meh\{world}\` (sat + GeoJSON + DEM + preview) |
+| 2    | `batch\02_export_ocap.bat`      | diag   | `diag_exportTerrainSVG` + ocap exporter per world → `Arma3\ocap_exporter\{world}\`  |
+| 3    | `batch\03_postprocess.bat`      | —      | ocap-rt Docker render → `ramet-postprocess` Docker (merge + PMTiles + SVG slice + WebP/pngquant + verify) → `Arma3\ramet_output\{world}\` |
+| 4a   | `batch\04_deploy.bat`           | —      | Copy `Arma3\ramet_output\{world}\` into the local planner repo |
+| 4b   | `batch\05_zip_for_upload.bat`   | —      | Pack each world (or `--bundle` all) into `Arma3\ramet_output\_zips\*.zip` for SFTP to a remote planner |
 
 Inside Arma, both bulk-export missions use Archangel (`"archangel" callExtension ["ramet.bulk.next_world", []]` etc.) to share queue state with the Python `ramet/` module, so the run survives crashes and per-world branch swaps.
 
@@ -55,12 +58,17 @@ RAMET/
 
 ## Dependencies
 
-- Docker Desktop (for ocap-renderterrain render)
-- Python 3.11+ with `lxml`, `pyyaml`, `pillow` (`pip install -r tools/requirements.txt`)
-- `tippecanoe`, `pmtiles` CLI (PMTiles build) — orchestrate logs a skip if missing
-- `cwebp`, `pngquant`, `oxipng` (raster optimization) — skipped per-layer if missing
-- Existing subproject toolchains: CMake/Conan/Intercept (grad_meh), Docker (ocap-rt)
-- Planner needs `pmtiles.js` + `protomaps-leaflet.js` vendored under `static/lib/`
+Host needs only **Docker Desktop**. Post-processing runs in two images:
+
+- `ramet-postprocess` — built by `batch\03_postprocess.bat` from `tools\Dockerfile`. Bundles tippecanoe, pmtiles CLI, cwebp, pngquant, oxipng, Python 3.12 + `lxml` / `pyyaml` / `pillow`. The orchestrate entry-point runs inside it; nothing is installed on the host.
+- `ocap-renderterrain` — upstream image built by `@ocap_renderterrain\ocap_renderterrain_process.bat`.
+
+Build-time only (one-off, when producing a release):
+- HEMTT on PATH (for `release.ps1`)
+- Subproject toolchains: CMake/Conan/Intercept (grad_meh), Docker (ocap-rt)
+
+Planner-side:
+- `pmtiles.js` + `protomaps-leaflet.js` vendored under `JSOC-OPS-Warlords\server\warlords\static\lib\`
 
 ## Docs
 

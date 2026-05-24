@@ -18,7 +18,6 @@ def _process_bat() -> Path | None:
     """Find the bundled ocap_renderterrain_process.bat (planted by hemtt bundle hook)."""
     candidates = [
         _arma_root() / "@ocap_renderterrain" / "ocap_renderterrain_process.bat",
-        _arma_root() / "@root_amet" / "ocap_renderterrain_process.bat",
         _arma_root() / "ocap_renderterrain_process.bat",
     ]
     for c in candidates:
@@ -32,7 +31,7 @@ def _spawn(world: str) -> None:
     if bat is None:
         bulk._append_log(f"kickoff.run_docker {world}: process bat not found — skipped")
         return
-    log_dir = _arma_root() / "ramet_state" / "kickoff_logs"
+    log_dir = bulk._state_dir() / "kickoff_logs"
     log_dir.mkdir(parents=True, exist_ok=True)
     log_path = log_dir / f"{world}.log"
     try:

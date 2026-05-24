@@ -1,19 +1,20 @@
 """Top-level post-processing entry point.
 
-For each world found under _intermediate/, produce a unified
-output/{world}/ tree:
-  1. merge_outputs.merge_world    -> base map.json + raster pyramids + DEM
-  2. geojson_to_pmtiles.build_pmtiles  -> vector/features.pmtiles + vector layers
-  3. slice_svg.slice_svg            -> svg/layers/*.svg.gz + svg layers
-  4. optimize_tiles.optimize        -> webp + pngquant + oxipng
-  5. verify.verify_world            -> sanity check; print errors
+Reads upstream exporter outputs directly from the Arma 3 root:
+    <Arma3>/grad_meh/{world}/
+    <Arma3>/ocap_exporter/{world}/              (raw SVG + ASC)
+    <Arma3>/ocap_renderterrain_output/{world}/  (Docker-rendered tile pyramids)
 
-Then writes map.json + source.json.
+Writes the unified per-world tree to:
+    <Arma3>/ramet_output/{world}/
+
+For dev runs (no Arma), pass --from-reference to read inputs out of
+RAMET/reference_files/ and write to RAMET/output/.
 
 Usage:
     python tools/orchestrate.py --all
     python tools/orchestrate.py --world altis
-    python tools/orchestrate.py --world altis --from-reference  # use reference_files/
+    python tools/orchestrate.py --world altis --from-reference
 """
 
 from __future__ import annotations
@@ -21,6 +22,7 @@ from __future__ import annotations
 import argparse
 import datetime
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -34,7 +36,7 @@ import verify as verify_mod  # noqa: E402
 
 def _safe_import_pmtiles():
     try:
-        import geojson_to_pmtiles  # noqa: E402
+        import geojson_to_pmtiles
         return geojson_to_pmtiles
     except Exception:
         return None
@@ -42,94 +44,10 @@ def _safe_import_pmtiles():
 
 def _safe_import_slice():
     try:
-        import slice_svg  # noqa: E402
+        import slice_svg
         return slice_svg
     except Exception:
         return None
-
-
-def process_world(world: str, intermediate: Path, output: Path,
-                  skip_pmtiles: bool = False,
-                  skip_slice: bool = False,
-                  skip_optimize: bool = False) -> dict:
-    grad_dir = intermediate / "grad_meh" / world
-    ocap_dir = intermediate / "ocap_rt" / world
-    grad = grad_dir if grad_dir.is_dir() else None
-    ocap = ocap_dir if ocap_dir.is_dir() else None
-
-    if grad is None and ocap is None:
-        return {"world": world, "ok": False, "reason": "no inputs under _intermediate/"}
-
-    map_json = merge_outputs.merge_world(world, grad, ocap, output)
-
-    # vector / pmtiles
-    if grad is not None and not skip_pmtiles:
-        mod = _safe_import_pmtiles()
-        if mod is not None:
-            try:
-                out_pmtiles = output / world / "vector" / "features.pmtiles"
-                manifest = mod.build_pmtiles(grad, out_pmtiles,
-                                             max_zoom=map_json.get("maxZoom", 14),
-                                             min_zoom=map_json.get("minZoom", 0))
-                map_json["vectorSource"] = {
-                    "type": "pmtiles",
-                    "url": "vector/features.pmtiles",
-                    "layers": [
-                        {"id": lyr["id"],
-                         "label": lyr["label"],
-                         "category": _category_for(lyr["id"]),
-                         "default": _default_for(lyr["id"])}
-                        for lyr in manifest["layers"]
-                    ],
-                }
-                # classes.json companion
-                (output / world / "vector" / "classes.json").write_text(
-                    json.dumps(map_json["vectorSource"]["layers"], indent=2),
-                    encoding="utf-8",
-                )
-            except Exception as exc:
-                print(f"[orchestrate] {world}: pmtiles build skipped — {exc}")
-
-    # svg slicing
-    if ocap is not None and not skip_slice:
-        mod = _safe_import_slice()
-        if mod is not None:
-            try:
-                svg_in = output / world / "svg" / "full.svg.gz"
-                if svg_in.exists():
-                    results = mod.slice_svg(svg_in, output / world / "svg" / "layers")
-                    map_json["svgLayers"] = [
-                        {"id": f"{cls}_svg",
-                         "path": f"svg/layers/{cls}.svg.gz",
-                         "label": meta["label"]}
-                        for cls, meta in results.items()
-                    ]
-            except Exception as exc:
-                print(f"[orchestrate] {world}: svg slice skipped — {exc}")
-
-    # raster optimization
-    if not skip_optimize:
-        counts = optimize_tiles.optimize(output / world)
-        print(f"[orchestrate] {world}: optimize counts={counts}")
-        # rewrite raster layer extensions to .webp where we converted
-        for layer in map_json.get("rasterLayers", []):
-            variant = layer["id"]
-            sample = (output / world / "tiles" / variant / "0" / "0" / "0.webp")
-            if sample.exists():
-                layer["ext"] = "webp"
-                layer["path"] = f"tiles/{variant}/{{z}}/{{x}}/{{y}}.webp"
-
-    # finalise manifest
-    (output / world / "map.json").write_text(json.dumps(map_json, indent=2), encoding="utf-8")
-    (output / world / "source.json").write_text(json.dumps({
-        "generatedAt": datetime.datetime.utcnow().isoformat() + "Z",
-        "grad_meh": str(grad) if grad else None,
-        "ocap_rt": str(ocap) if ocap else None,
-        "tool": "ramet.orchestrate",
-    }, indent=2), encoding="utf-8")
-
-    errs, notes = verify_mod.verify_world(output / world)
-    return {"world": world, "ok": not errs, "errors": errs, "notes": notes}
 
 
 _TRANSPORT = {"road_main", "road", "track", "trail", "railway"}
@@ -154,18 +72,111 @@ def _default_for(lid: str) -> bool:
     return any(t in lid for t in {"road_main", "road", "forest", "location", "water"})
 
 
-def _resolve_intermediate(from_reference: bool) -> Path:
+def process_world(world: str,
+                  grad_dir: Path | None,
+                  ocap_raw_dir: Path | None,
+                  ocap_rendered_dir: Path | None,
+                  out_root: Path,
+                  skip_pmtiles: bool = False,
+                  skip_slice: bool = False,
+                  skip_optimize: bool = False) -> dict:
+    if not any([grad_dir, ocap_raw_dir, ocap_rendered_dir]):
+        return {"world": world, "ok": False, "reason": "no inputs"}
+
+    map_json = merge_outputs.merge_world(world, grad_dir, ocap_raw_dir, ocap_rendered_dir, out_root)
+
+    # vector / pmtiles from grad_meh geojsons
+    if grad_dir is not None and not skip_pmtiles:
+        mod = _safe_import_pmtiles()
+        if mod is not None:
+            try:
+                out_pmtiles = out_root / world / "vector" / "features.pmtiles"
+                manifest = mod.build_pmtiles(grad_dir, out_pmtiles,
+                                             max_zoom=map_json.get("maxZoom", 14),
+                                             min_zoom=map_json.get("minZoom", 0))
+                map_json["vectorSource"] = {
+                    "type": "pmtiles",
+                    "url": "vector/features.pmtiles",
+                    "layers": [
+                        {"id": lyr["id"],
+                         "label": lyr["label"],
+                         "category": _category_for(lyr["id"]),
+                         "default": _default_for(lyr["id"])}
+                        for lyr in manifest["layers"]
+                    ],
+                }
+                (out_root / world / "vector" / "classes.json").write_text(
+                    json.dumps(map_json["vectorSource"]["layers"], indent=2),
+                    encoding="utf-8",
+                )
+            except Exception as exc:
+                print(f"[orchestrate] {world}: pmtiles build skipped — {exc}")
+
+    # svg slicing from raw ocap SVG
+    if ocap_raw_dir is not None and not skip_slice:
+        mod = _safe_import_slice()
+        if mod is not None:
+            try:
+                svg_in = out_root / world / "svg" / "full.svg.gz"
+                if svg_in.exists():
+                    results = mod.slice_svg(svg_in, out_root / world / "svg" / "layers")
+                    map_json["svgLayers"] = [
+                        {"id": f"{cls}_svg",
+                         "path": f"svg/layers/{cls}.svg.gz",
+                         "label": meta["label"]}
+                        for cls, meta in results.items()
+                    ]
+            except Exception as exc:
+                print(f"[orchestrate] {world}: svg slice skipped — {exc}")
+
+    # raster optimization
+    if not skip_optimize:
+        counts = optimize_tiles.optimize(out_root / world)
+        print(f"[orchestrate] {world}: optimize counts={counts}")
+        for layer in map_json.get("rasterLayers", []):
+            variant = layer["id"]
+            sample = (out_root / world / "tiles" / variant / "0" / "0" / "0.webp")
+            if sample.exists():
+                layer["ext"] = "webp"
+                layer["path"] = f"tiles/{variant}/{{z}}/{{x}}/{{y}}.webp"
+
+    (out_root / world / "map.json").write_text(json.dumps(map_json, indent=2), encoding="utf-8")
+    (out_root / world / "source.json").write_text(json.dumps({
+        "generatedAt": datetime.datetime.utcnow().isoformat() + "Z",
+        "grad_meh": str(grad_dir) if grad_dir else None,
+        "ocap_raw": str(ocap_raw_dir) if ocap_raw_dir else None,
+        "ocap_rendered": str(ocap_rendered_dir) if ocap_rendered_dir else None,
+        "tool": "ramet.orchestrate",
+    }, indent=2), encoding="utf-8")
+
+    errs, notes = verify_mod.verify_world(out_root / world)
+    return {"world": world, "ok": not errs, "errors": errs, "notes": notes}
+
+
+def _resolve_input_roots(from_reference: bool) -> tuple[Path, Path, Path, Path]:
+    """Returns (grad_root, ocap_raw_root, ocap_rendered_root, out_root)."""
     if from_reference:
-        return ROOT / "reference_files"
-    # in-game: <Arma3>/ramet_intermediate. dev/post-process: <RAMET>/_intermediate
-    candidates = [
-        ROOT / "_intermediate",
-        ROOT.parent / "ramet_intermediate",
-    ]
-    for c in candidates:
-        if c.is_dir():
-            return c
-    return ROOT / "_intermediate"
+        ref = ROOT / "reference_files"
+        return (ref / "grad_meh",
+                ref / "ocap_exporter",
+                ref / "ocap_renderterrain_output",
+                ROOT / "output")
+    # Pipeline mode: env override -> Arma 3 root inferred from cwd.
+    arma_root = Path(os.environ.get("RAMET_ARMA_ROOT", os.getcwd()))
+    return (arma_root / "grad_meh",
+            arma_root / "ocap_exporter",
+            arma_root / "ocap_renderterrain_output",
+            arma_root / "ramet_output")
+
+
+def _collect_worlds(roots: tuple[Path, ...]) -> list[str]:
+    worlds: set[str] = set()
+    for r in roots:
+        if r.is_dir():
+            for p in r.iterdir():
+                if p.is_dir():
+                    worlds.add(p.name)
+    return sorted(worlds)
 
 
 def main() -> int:
@@ -173,39 +184,36 @@ def main() -> int:
     ap.add_argument("--all", action="store_true", help="process every world found")
     ap.add_argument("--world", action="append", default=[], help="specific world(s)")
     ap.add_argument("--from-reference", action="store_true",
-                    help="read inputs from reference_files/ instead of _intermediate/")
-    ap.add_argument("--output", default=str(ROOT / "output"))
+                    help="read inputs from reference_files/ and write to RAMET/output/")
+    ap.add_argument("--output", help="override output root")
     ap.add_argument("--skip-pmtiles", action="store_true")
     ap.add_argument("--skip-slice", action="store_true")
     ap.add_argument("--skip-optimize", action="store_true")
     args = ap.parse_args()
 
-    intermediate = _resolve_intermediate(args.from_reference)
-    output = Path(args.output)
-    output.mkdir(parents=True, exist_ok=True)
+    grad_root, ocap_raw_root, ocap_rendered_root, default_out = _resolve_input_roots(args.from_reference)
+    out_root = Path(args.output) if args.output else default_out
+    out_root.mkdir(parents=True, exist_ok=True)
 
     if args.all:
-        worlds: set[str] = set()
-        for sub in ("grad_meh", "ocap_rt"):
-            for p in (intermediate / sub).glob("*"):
-                if p.is_dir():
-                    worlds.add(p.name)
-        target = sorted(worlds)
+        target = _collect_worlds((grad_root, ocap_raw_root, ocap_rendered_root))
     else:
         target = args.world
 
     if not target:
         print("no worlds to process — supply --all or --world")
+        print(f"  looked in: {grad_root}, {ocap_raw_root}, {ocap_rendered_root}")
         return 2
 
     results = []
     for w in target:
-        res = process_world(
-            w, intermediate, output,
-            skip_pmtiles=args.skip_pmtiles,
-            skip_slice=args.skip_slice,
-            skip_optimize=args.skip_optimize,
-        )
+        gd = grad_root / w if (grad_root / w).is_dir() else None
+        oraw = ocap_raw_root / w if (ocap_raw_root / w).is_dir() else None
+        orend = ocap_rendered_root / w if (ocap_rendered_root / w).is_dir() else None
+        res = process_world(w, gd, oraw, orend, out_root,
+                            skip_pmtiles=args.skip_pmtiles,
+                            skip_slice=args.skip_slice,
+                            skip_optimize=args.skip_optimize)
         results.append(res)
         print(json.dumps(res, indent=2))
 
