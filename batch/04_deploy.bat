@@ -13,7 +13,8 @@ popd >nul
 pushd "%SCRIPT_DIR%..\.." >nul
 set "ARMA_ROOT=%CD%"
 
-set "PLANNER_DEFAULT=%RAMET_ROOT%\..\..\JSOC-OPS-Warlords\server\warlords\map_tiles"
+set "JSOC_ROOT=G:\Games\Arma 3\# Git\JSOC-OPS-Warlords"
+set "PLANNER_DEFAULT=%JSOC_ROOT%\server\warlords\map_tiles"
 
 docker info >nul 2>nul
 if not errorlevel 1 (
