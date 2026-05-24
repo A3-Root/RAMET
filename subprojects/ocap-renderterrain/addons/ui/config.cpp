@@ -42,31 +42,7 @@ class Attributes;
 
 #include "CfgFunctions.hpp"
 
-class RscStandardDisplay;
-class RscDisplayMain: RscStandardDisplay
-{
-	class ControlsBackground 
-	{
-		class ocap_onLoadHandler: ctrlStatic {
-			x = 0;
-			y = 0;
-			w = 0;
-			h = 0;
-			onLoad="params ['_ctrl']; (ctrlParent _ctrl) createDisplay 'ocap_renderterrain_main';";
-		};
-	};
-};
-
-class CfgMainMenuSpotlight
-{
-	class ocap_renderterrain
-	{
-		text="OCAP RenderTerrain";
-		textIsQuote=0;
-		picture="\x\ocap_renderterrain\addons\ui\data\spotlight_co.paa";
-		video="";
-		action="params ['_ctrl']; (ctrlParent _ctrl) createDisplay 'ocap_renderterrain_main';";
-		actionText="OPEN";
-		condition="true";
-	};
-};
+// RAMET (@root_amet) is the single main-menu entry point. The original
+// auto-open RscDisplayMain hook and CfgMainMenuSpotlight tile were removed
+// from this subproject — RAMET's picker calls
+// `createDisplay "ocap_renderterrain_main"` when the operator chooses OCAP.

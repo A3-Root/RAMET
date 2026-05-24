@@ -11,6 +11,15 @@
 
 Edit `@root_amet\batch\worlds.txt` — one CfgWorlds class name per line. Comments with `#`. The same file is consumed by both Arma passes, read directly from the mod folder (nothing is dropped into the Arma 3 root).
 
+## In-game UI overview
+
+Two pickers appear once `@root_amet` is loaded alongside `@grad_meh` + `@ocap_renderterrain`:
+
+- **Main-menu picker** (auto on launch + "RAMET — Bulk Export" spotlight tile). Overrides grad_meh's and ocap-rt's individual main-menu dialogs (each mod normally auto-opens its own UI on start, and the second one to fire wins — that's why it used to default to OCAP). RAMET shows a single two-option prompt (`Grad_meh` / `OCAP`); the choice opens the corresponding mod's interactive single-map exporter. Diagnostic-only options are disabled when running the stable branch.
+- **In-mission picker** (`Ctrl+Shift+R`, also auto-opens once after player init). Triggers the Archangel-driven worlds.txt bulk loop — `ramet_fnc_bulkExportGradMeh` or `ramet_fnc_bulkExportOcap`.
+
+Use the main-menu picker for one-off interactive exports; use the in-mission picker for fully automated bulk runs across the worlds.txt queue.
+
 ## 2. grad_meh export (main branch)
 
 ```
