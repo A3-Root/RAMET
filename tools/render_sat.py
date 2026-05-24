@@ -42,10 +42,13 @@ def _load_gz(path: Path) -> list[dict]:
     try:
         with gzip.open(path, "rt", encoding="utf-8") as f:
             data = json.load(f)
-        return data.get("features", []) if isinstance(data, dict) else []
+        if isinstance(data, list):
+            return data
+        if isinstance(data, dict):
+            return data.get("features", []) or []
     except Exception as exc:
         print(f"[render_sat] warn: {path.name}: {exc}")
-        return []
+    return []
 
 
 def _w2px(coord: list[float], world_size: float, img_w: int, img_h: int) -> tuple[int, int]:

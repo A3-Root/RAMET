@@ -66,6 +66,32 @@ def _safe_import_slice():
         return None
 
 
+def _layer_max_zoom(tiles_dir: Path, variant: str, ext: str) -> int | None:
+    variant_dir = tiles_dir / variant
+    if not variant_dir.is_dir():
+        return None
+    max_z = -1
+    for child in variant_dir.iterdir():
+        if child.is_dir() and child.name.isdigit():
+            if any(child.rglob(f"*.{ext}")):
+                max_z = max(max_z, int(child.name))
+    return max_z if max_z >= 0 else None
+
+
+def _read_dem_cellsize(dem_gz: Path) -> float | None:
+    import gzip as _gzip
+    try:
+        opener = _gzip.open if dem_gz.suffix == ".gz" else open
+        with opener(dem_gz, "rt", encoding="utf-8", errors="ignore") as fh:
+            for _ in range(10):
+                line = fh.readline()
+                if line.lower().startswith("cellsize"):
+                    return float(line.split()[1])
+    except Exception:
+        pass
+    return None
+
+
 _TRANSPORT = {"road_main", "road", "track", "trail", "railway"}
 _STRUCTURE = {"house", "building", "ruin", "fortress", "powerline", "fence", "wall"}
 _TERRAIN = {"forest", "rocks", "water", "rivers", "scrub", "tree"}
@@ -227,6 +253,23 @@ def process_world(world: str,
             if sample.exists():
                 layer["ext"] = "webp"
                 layer["path"] = f"tiles/{variant}/{{z}}/{{x}}/{{y}}.webp"
+
+    # per-layer actual maxZoom (tiles may not reach global maxZoom)
+    for layer in map_json.get("rasterLayers", []):
+        mz = _layer_max_zoom(out_tiles, layer["id"], layer.get("ext", "png"))
+        if mz is not None:
+            layer["maxZoom"] = mz
+    layer_zooms = [l["maxZoom"] for l in map_json.get("rasterLayers", []) if "maxZoom" in l]
+    if layer_zooms:
+        map_json["maxZoom"] = max(layer_zooms)
+
+    # cellSize from DEM ASC header if meta.json didn't supply it
+    if not map_json.get("cellSize"):
+        cs = _read_dem_cellsize(out_root / world / "dem" / "dem.asc.gz")
+        if cs is not None:
+            map_json["cellSize"] = cs
+            if isinstance(map_json.get("dem"), dict):
+                map_json["dem"]["cellSize"] = cs
 
     (out_root / world / "map.json").write_text(json.dumps(map_json, indent=2), encoding="utf-8")
     (out_root / world / "source.json").write_text(json.dumps({

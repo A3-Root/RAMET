@@ -27,6 +27,13 @@ def write_pyramid(img: Image.Image, out_dir: Path, tile_size: int = TILE_SIZE) -
             break
         level_img = level_img.resize((nw, nh), Image.LANCZOS)
 
+    # After the loop, level_img is the next downsample that didn't satisfy the
+    # tile_size condition (e.g. 192px for a 12288px source, < 256px tile_size).
+    # Append it so z=0 is always a 1-tile world overview, matching ocap_renderterrain's
+    # pyramid scheme.  Without this, sat/baked tiles are offset by one z-level vs topo.
+    if level_img is not levels[-1]:
+        levels.append(level_img)
+
     # levels[0]=full-res=highest z, levels[-1]=smallest=z=0
     for z, img_at_level in enumerate(reversed(levels)):
         lw, lh = img_at_level.size

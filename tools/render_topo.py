@@ -145,10 +145,13 @@ def _load_gz(path: Path) -> list[dict]:
     try:
         with gzip.open(path, "rt", encoding="utf-8") as f:
             data = json.load(f)
-        return data.get("features", []) if isinstance(data, dict) else []
+        if isinstance(data, list):
+            return data
+        if isinstance(data, dict):
+            return data.get("features", []) or []
     except Exception as exc:
         print(f"[render_topo] warn: {path.name}: {exc}")
-        return []
+    return []
 
 
 def _w2px(coord: list[float], world_size: float, img_w: int, img_h: int) -> tuple[int, int]:
@@ -285,17 +288,21 @@ def render(
 
     # Ensure we have the base images (may need to generate even if plain was skipped)
     if topo_img is None:
-        plain_target = out_tiles / "topo"
-        if plain_target.exists():
-            print("[render_topo] loading existing topo for baked base")
-            # Load a low-res tile to check, but we need full-res for overlay
-            # Re-generate from DEM since we don't have a single full-res source
         print("[render_topo] generating topo base for baked overlay")
         topo_img = _build_topo(elevation, cellsize, dark=False)
 
     if topo_dark_img is None:
         print("[render_topo] generating topo_dark base for baked overlay")
         topo_dark_img = _build_topo(elevation, cellsize, dark=True)
+
+    # Upscale DEM-rendered base to world resolution so baked_topo tiles reach the
+    # same zoom depth as topo and sat (DEM is ~2048px; world may be 6144–12288px).
+    ws = int(world_size)
+    if topo_img.width != ws:
+        print(f"[render_topo] upscaling topo base {topo_img.width}px → {ws}px")
+        topo_img = topo_img.resize((ws, ws), Image.LANCZOS)
+    if topo_dark_img.width != ws:
+        topo_dark_img = topo_dark_img.resize((ws, ws), Image.LANCZOS)
 
     print("[render_topo] generating baked_topo")
     baked = _apply_overlays(topo_img, geojson_dir, world_size, _STYLE_LIGHT)
