@@ -230,7 +230,7 @@ def process_world(world: str,
 
     (out_root / world / "map.json").write_text(json.dumps(map_json, indent=2), encoding="utf-8")
     (out_root / world / "source.json").write_text(json.dumps({
-        "generatedAt": datetime.datetime.utcnow().isoformat() + "Z",
+        "generatedAt": datetime.datetime.now(datetime.timezone.utc).isoformat().replace("+00:00", "Z"),
         "grad_meh": str(grad_dir) if grad_dir else None,
         "ocap_raw": str(ocap_raw_dir) if ocap_raw_dir else None,
         "ocap_rendered": str(ocap_rendered_dir) if ocap_rendered_dir else None,

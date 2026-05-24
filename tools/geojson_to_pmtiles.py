@@ -28,13 +28,29 @@ def _gunzip_to(src: Path, dst: Path) -> None:
         shutil.copyfileobj(fp_in, fp_out)
 
 
+def _normalize_geojson(path: Path) -> None:
+    """Wrap a plain JSON array as a FeatureCollection in-place."""
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return
+    if isinstance(data, list):
+        path.write_text(
+            json.dumps({"type": "FeatureCollection", "features": data}),
+            encoding="utf-8",
+        )
+
+
 def _has_features(geojson_path: Path) -> bool:
     try:
         data = json.loads(geojson_path.read_text(encoding="utf-8"))
     except Exception:
         return False
-    feats = data.get("features") if isinstance(data, dict) else None
-    return bool(feats)
+    if isinstance(data, list):
+        return bool(data)
+    if isinstance(data, dict):
+        return bool(data.get("features"))
+    return False
 
 
 def build_pmtiles(grad_meh_world_dir: Path, out_pmtiles: Path,
@@ -79,6 +95,7 @@ def build_pmtiles(grad_meh_world_dir: Path, out_pmtiles: Path,
             else:
                 continue
 
+            _normalize_geojson(staged)
             if not _has_features(staged):
                 continue
             tippe_args += ["-L", f"{stem}:{staged}"]

@@ -48,6 +48,7 @@ echo === orchestrate (merge + pmtiles + slice + optimize + verify) ===
 docker run --rm ^
     -v "%ARMA_ROOT%":/work ^
     -e RAMET_ARMA_ROOT=/work ^
+    -e PYTHONUNBUFFERED=1 ^
     ramet-postprocess:latest --all
 if errorlevel 1 (
     echo [ERR] orchestrate reported failures.
