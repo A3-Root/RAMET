@@ -1,5 +1,5 @@
 """Re-encode raster tile pyramids:
-- sat-family (sat, sat_dark, baked_sat) -> WebP q85 via cwebp
+- sat-family (sat, sat_dark, baked_sat, baked_sat_dark) -> WebP q85 via cwebp
 - topo-family (topo, topo_dark, topoRelief, colorRelief) -> pngquant + oxipng
 
 Idempotent: skips outputs already present and newer than source.
@@ -10,16 +10,50 @@ of that step (pyramid still emitted as raw PNG).
 from __future__ import annotations
 
 import argparse
+import os
 import shutil
 import subprocess
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 WEBP_VARIANTS = {"sat", "sat_dark", "baked_sat", "baked_sat_dark"}
 PNG_VARIANTS = {"topo", "topo_dark", "topoRelief", "colorRelief", "baked_topo", "baked_topo_dark"}
 
+_WORKERS = os.cpu_count() or 4
+
 
 def _have(cmd: str) -> bool:
     return shutil.which(cmd) is not None
+
+
+def _to_webp(png: Path) -> str:
+    webp = png.with_suffix(".webp")
+    if webp.exists() and webp.stat().st_mtime >= png.stat().st_mtime:
+        return "skipped"
+    try:
+        subprocess.run(
+            ["cwebp", "-quiet", "-q", "85", str(png), "-o", str(webp)],
+            check=True, capture_output=True,
+        )
+        png.unlink()
+        return "webp"
+    except subprocess.CalledProcessError:
+        return "error"
+
+
+def _to_png(png: Path, have_pngquant: bool, have_oxipng: bool) -> str:
+    if have_pngquant:
+        subprocess.run(
+            ["pngquant", "--quality=80-95", "--strip", "--force",
+             "--ext", ".png", "--skip-if-larger", str(png)],
+            check=False, capture_output=True,
+        )
+    if have_oxipng:
+        subprocess.run(
+            ["oxipng", "-o", "4", "--strip", "safe", "--quiet", str(png)],
+            check=False, capture_output=True,
+        )
+    return "png"
 
 
 def optimize(world_dir: Path) -> dict:
@@ -28,43 +62,41 @@ def optimize(world_dir: Path) -> dict:
     if not tiles_dir.is_dir():
         return counts
 
-    have_cwebp = _have("cwebp")
+    have_cwebp    = _have("cwebp")
     have_pngquant = _have("pngquant")
-    have_oxipng = _have("oxipng")
+    have_oxipng   = _have("oxipng")
 
-    for variant_dir in tiles_dir.iterdir():
-        if not variant_dir.is_dir():
-            continue
-        variant = variant_dir.name
-        if variant in WEBP_VARIANTS and have_cwebp:
-            for png in variant_dir.rglob("*.png"):
-                webp = png.with_suffix(".webp")
-                if webp.exists() and webp.stat().st_mtime >= png.stat().st_mtime:
-                    counts["skipped"] += 1
-                    continue
-                try:
-                    subprocess.run(
-                        ["cwebp", "-quiet", "-q", "85", str(png), "-o", str(webp)],
-                        check=True,
-                    )
-                    png.unlink()
-                    counts["webp"] += 1
-                except subprocess.CalledProcessError:
-                    counts["errors"] += 1
-        elif variant in PNG_VARIANTS:
-            for png in variant_dir.rglob("*.png"):
-                if have_pngquant:
-                    subprocess.run(
-                        ["pngquant", "--quality=80-95", "--strip", "--force",
-                         "--ext", ".png", "--skip-if-larger", str(png)],
-                        check=False,
-                    )
-                if have_oxipng:
-                    subprocess.run(
-                        ["oxipng", "-o", "4", "--strip", "safe", "--quiet", str(png)],
-                        check=False,
-                    )
-                counts["png"] += 1
+    futures = {}
+    with ThreadPoolExecutor(max_workers=_WORKERS) as pool:
+        for variant_dir in tiles_dir.iterdir():
+            if not variant_dir.is_dir():
+                continue
+            variant = variant_dir.name
+            pngs = list(variant_dir.rglob("*.png"))
+            total = len(pngs)
+            if total == 0:
+                continue
+            print(f"[optimize] {variant}: queuing {total} tiles", flush=True)
+
+            if variant in WEBP_VARIANTS and have_cwebp:
+                for png in pngs:
+                    futures[pool.submit(_to_webp, png)] = variant
+            elif variant in PNG_VARIANTS:
+                for png in pngs:
+                    futures[pool.submit(_to_png, png, have_pngquant, have_oxipng)] = variant
+
+        done = 0
+        report_every = max(1, len(futures) // 20)
+        for fut in as_completed(futures):
+            result = fut.result()
+            counts[result if result in counts else "errors"] += 1
+            done += 1
+            if done % report_every == 0 or done == len(futures):
+                print(f"[optimize] {done}/{len(futures)} tiles done "
+                      f"(webp={counts['webp']} png={counts['png']} "
+                      f"skip={counts['skipped']} err={counts['errors']})",
+                      flush=True)
+
     return counts
 
 

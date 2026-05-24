@@ -25,10 +25,8 @@ for /f "tokens=2*" %%A in (
 ) do set "ARMA_ROOT=%%B"
 
 if not defined ARMA_ROOT (
-    pushd "%SCRIPT_DIR%..\.." >nul
-    set "ARMA_ROOT=%CD%"
-    popd >nul
-    echo [INFO] Registry lookup failed, using path-derived Arma root: %ARMA_ROOT%
+    set "ARMA_ROOT=G:\Games\Steam\steamapps\common\Arma 3"
+    echo [INFO] Registry lookup failed, using hardcoded Arma root: %ARMA_ROOT%
 )
 
 set "DLL_DST=%ARMA_ROOT%\@grad_meh\intercept"
@@ -137,7 +135,7 @@ if not exist "%DLL_SRC%" (
 
 if not exist "%DLL_DST%" (
     echo [INFO] creating %DLL_DST%
-    mkdir "%DLL_DST%"
+    md "%DLL_DST%"
 )
 
 copy /Y "%DLL_SRC%" "%DLL_DST%\grad_meh_x64.dll"
