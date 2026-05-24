@@ -107,6 +107,16 @@ def log_progress(msg: str):
     return [True]
 
 
+def export_summary():
+    """Return [total, skipped, skipped_names_csv] for the completed bulk run."""
+    with _LOCK:
+        state = _load_state()
+        done = state.get("done", {})
+        total = len(done)
+        skipped = [w for w, v in done.items() if not v.get("ok", True)]
+        return [total, len(skipped), ", ".join(skipped)]
+
+
 def reset_state():
     """Manual recovery: delete state file. Callable from Python repl, not SQF."""
     f = _state_file()

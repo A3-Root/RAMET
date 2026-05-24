@@ -66,5 +66,16 @@ while {true} do {
     };
 };
 
-["bulk grad_meh export complete"] call _log;
+private _summary = "archangel" callExtension ["ramet.bulk.export_summary", []];
+private _total   = _summary param [0, 0, [0]];
+private _skipped = _summary param [1, 0, [0]];
+private _names   = _summary param [2, "", [""]];
+
+private _summaryMsg = format ["bulk grad_meh export complete — %1 processed, %2 skipped", _total, _skipped];
+[_summaryMsg] call _log;
+
+if (_skipped > 0) then {
+    [format ["skipped maps: %1", _names]] call _log;
+};
+
 endMission "END1";
