@@ -25,6 +25,7 @@ references/**/*
 logs/**/*
 !batch/worlds.txt
 !docs/**/*
+!CMakeLists.txt
 
 # =========================
 # Python
