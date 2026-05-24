@@ -53,8 +53,8 @@ while {true} do {
             !(call compile "gradMehExportRunning")
         };
 
-        // nil = grad_meh threw (unsupported map); false = normal completion
-        private _exportOk = !(isNil { call compile "gradMehExportRunning" });
+        // gradMehExportFailed = true when grad_meh caught an error without rethrowing
+        private _exportOk = !(call compile "gradMehExportFailed");
 
         if (_exportOk) then {
             [_world, true, ""] call _markDone;

@@ -62,6 +62,7 @@ using iet = types::game_state::game_evaluator::evaluator_error_type;
 using SQFPar = game_value_parameter;
 
 static bool gradMehIsRunning = false;
+static bool gradMehHadError = false;
 
 int intercept::api_version() { // This is required for the plugin to work.
     return INTERCEPT_SDK_API_VERSION;
@@ -344,7 +345,7 @@ void extractMap(const std::string &worldName, const std::string &worldPath, std:
         PLOG_ERROR << "Exception in extract map command";
         PLOG_ERROR << fmt::format("WRP Path: {}", curWorldPath);
         PLOG_ERROR << ex.what();
-        throw;
+        gradMehHadError = true;
     }
 
     gradMehIsRunning = false;
@@ -353,6 +354,10 @@ void extractMap(const std::string &worldName, const std::string &worldPath, std:
 
 game_value exportRunningCommand(game_state &gs) {
     return gradMehIsRunning;
+}
+
+game_value exportFailedCommand(game_state &gs) {
+    return gradMehHadError;
 }
 
 game_value exportMapCommand(game_state &gs, SQFPar rightArg)
@@ -450,6 +455,7 @@ game_value exportMapCommand(game_state &gs, SQFPar rightArg)
 
     if (!gradMehIsRunning)
     {
+        gradMehHadError = false;
         gradMehIsRunning = true;
         std::thread readWrpThread(extractMap, worldName, worldPath, steps);
         readWrpThread.detach();
@@ -465,6 +471,7 @@ game_value exportMapCommand(game_state &gs, SQFPar rightArg)
 types::registered_sqf_function grad_meh_export_map_string;
 types::registered_sqf_function grad_meh_export_map_array;
 types::registered_sqf_function grad_meh_export_running;
+types::registered_sqf_function grad_meh_export_failed;
 
 void intercept::pre_start()
 {
@@ -474,6 +481,8 @@ void intercept::pre_start()
         client::host::register_sqf_command("gradMehExportMap", "Exports the given map", exportMapCommand, game_data_type::SCALAR, game_data_type::ARRAY);
     grad_meh_export_running =
         client::host::register_sqf_command("gradMehExportRunning", "Check if an export is currently running", exportRunningCommand, game_data_type::BOOL);
+    grad_meh_export_failed =
+        client::host::register_sqf_command("gradMehExportFailed", "Check if last export failed with an error", exportFailedCommand, game_data_type::BOOL);
 
 #if defined(_WIN32)
     std::filesystem::path a3_log_path;
