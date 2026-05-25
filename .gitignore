@@ -50,6 +50,7 @@ build/.env
 !README*.md
 logs/
 !batch/worlds.txt
+!batch/render_worlds.txt
 
 # =========================
 # General & Subprojects

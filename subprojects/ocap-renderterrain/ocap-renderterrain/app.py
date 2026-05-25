@@ -5,6 +5,7 @@ import subprocess
 import re
 import json
 import math
+import time
 from threading import Thread
 
 # import modules from ./modules
@@ -15,6 +16,11 @@ from modules import compress
 def run_command(command):
     print(f"Running: {command}", flush=True)
     subprocess.run(command, shell=True, check=True)
+
+
+def _elapsed(t0):
+    s = time.time() - t0
+    return f"{s:.1f}s" if s < 120 else f"{s/60:.1f}m"
 
 
 def zoom_level_for_image_size(image_size):
@@ -120,6 +126,7 @@ for WORLDNAME_PATH in world_list:
     OUTPUT_FOLDER = f"./output/{WORLDNAME}"
     TEMP_FOLDER = f"./temp/{WORLDNAME}"
 
+    _world_t = time.time()
     print("PROCESSING", WORLDNAME)
 
     # delete everything in the temp and output folders wihtout deleting the folder itself
@@ -214,16 +221,23 @@ for WORLDNAME_PATH in world_list:
 
     # first, preprocess the arma 3 svg as there are some things wrong with it
     print(f"=== Preprocessing SVG... {WORLDNAME} ===")
-
+    _t = time.time()
     file_conversion.preprocess_svg(SVG_FILE_PATH, SVG_FILE_PROC_PATH)
+    print(f"[timer] preprocess_svg: {_elapsed(_t)}", flush=True)
 
     # render alternates
     print(f'=== Generating "dark" svg... {WORLDNAME} ===')
+    _t = time.time()
     file_conversion.generate_svg_dark(SVG_FILE_PROC_PATH, SVG_DARK_FILE_PATH)
+    print(f"[timer] generate_svg_dark: {_elapsed(_t)}", flush=True)
     print(f'=== Generating "landonly" svg... {WORLDNAME} ===')
+    _t = time.time()
     file_conversion.generate_svg_landonly(SVG_FILE_PROC_PATH, SVG_LANDONLY_FILE_PATH)
+    print(f"[timer] generate_svg_landonly: {_elapsed(_t)}", flush=True)
     print(f'=== Generating "noland" svg... {WORLDNAME} ===')
+    _t = time.time()
     file_conversion.generate_svg_noland(SVG_FILE_PROC_PATH, SVG_NOLAND_FILE_PATH)
+    print(f"[timer] generate_svg_noland: {_elapsed(_t)}", flush=True)
     # print(f"=== Generating \"forestonly\" svg... {WORLDNAME} ===")
     # file_conversion.generate_svg_forestonly(SVG_FILE_PROC_PATH, SVG_FORESTONLY_FILE_PATH)
 
@@ -232,30 +246,38 @@ for WORLDNAME_PATH in world_list:
     # then, convert the svg to png. last param is the xy size of the png
     print(f"=== Generating default PNG... {WORLDNAME} ===")
     # do this in two steps - maps like Beketov break with how much scattered forest it has
+    _t = time.time()
     file_conversion.convert_svg_to_png(
         SVG_FILE_PROC_PATH, PNG_TOPO_FILE_PATH, WORLD_JSON.get("imageSize", 16384)
     )
+    print(f"[timer] inkscape topo: {_elapsed(_t)}", flush=True)
     # if image wasn't created, warn and skip this world
     if not os.path.exists(PNG_TOPO_FILE_PATH):
         print(f"Failed to create {PNG_TOPO_FILE_PATH}, skipping world...")
         continue
 
     print(f'=== Generating "dark" PNG... {WORLDNAME} ===')
+    _t = time.time()
     file_conversion.convert_svg_to_png(
         SVG_DARK_FILE_PATH, PNG_DARK_FILE_PATH, WORLD_JSON.get("imageSize", 16384)
     )
+    print(f"[timer] inkscape dark: {_elapsed(_t)}", flush=True)
     print(f"=== Generating landonly PNG... {WORLDNAME} ===")
+    _t = time.time()
     file_conversion.convert_svg_to_png(
         SVG_LANDONLY_FILE_PATH,
         PNG_LANDONLY_FILE_PATH,
         WORLD_JSON.get("imageSize", 16384),
     )
+    print(f"[timer] inkscape landonly: {_elapsed(_t)}", flush=True)
     print(f"=== Generating noland PNG... {WORLDNAME} ===")
+    _t = time.time()
     file_conversion.convert_svg_to_png(
         SVG_NOLAND_FILE_PATH,
         PNG_NOLAND_FILE_PATH,
         WORLD_JSON.get("imageSize", 16384),
     )
+    print(f"[timer] inkscape noland: {_elapsed(_t)}", flush=True)
     # print(f"=== Generating forestonly PNG... {WORLDNAME} ===")
     # file_conversion.convert_svg_to_png(
     #     SVG_FORESTONLY_FILE_PATH,
@@ -275,36 +297,45 @@ for WORLDNAME_PATH in world_list:
     )
     print(f"=== Generating hillshade and colorrelief... {WORLDNAME} ===")
     print("Generating colorrelief...")
+    _t = time.time()
     file_conversion.generate_colorrelief(
         ASC_FILE_PATH, PNG_COLORRELIEF_FILE_PATH, WORLD_JSON.get("imageSize", 16384)
     )
+    print(f"[timer] colorrelief: {_elapsed(_t)}", flush=True)
     print("Generating hillshade...")
+    _t = time.time()
     file_conversion.generate_heightmap(
         ASC_FILE_PATH, HILLSHADE_FILE_PATH, WORLD_JSON.get("imageSize", 16384)
     )
+    print(f"[timer] hillshade: {_elapsed(_t)}", flush=True)
     print("Setting half opacity on hillshade for later application...")
+    _t = time.time()
     file_conversion.set_half_opacity(
         HILLSHADE_FILE_PATH, HILLSHADE_HALFOPACITY_FILE_PATH
     )
+    print(f"[timer] set_half_opacity: {_elapsed(_t)}", flush=True)
 
     ########################################
 
     # Now, we'll overlay the hillshade and colorrelief onto the landonly PNG and save each as a file
     print(f"=== Overlaying hillshade onto landonly PNG... {WORLDNAME} ===")
-
+    _t = time.time()
     # overlay hillshade onto landonly
     file_conversion.multiply_images(
         os.path.abspath(PNG_LANDONLY_FILE_PATH),
         os.path.abspath(HILLSHADE_HALFOPACITY_FILE_PATH),
         os.path.abspath(PNG_HILLSHADE_BASE_FILE_PATH),
     )
+    print(f"[timer] multiply landonly+hillshade: {_elapsed(_t)}", flush=True)
     print(f"=== Overlaying hillshade onto colorrelief PNG... {WORLDNAME} ===")
+    _t = time.time()
     # overlay hillshade onto colorrelief
     file_conversion.multiply_images(
         os.path.abspath(PNG_COLORRELIEF_FILE_PATH),
         os.path.abspath(HILLSHADE_HALFOPACITY_FILE_PATH),
         os.path.abspath(PNG_COLORRELIEF_FILE_PATH),
     )
+    print(f"[timer] multiply colorrelief+hillshade: {_elapsed(_t)}", flush=True)
     # We're going to skip any compositing of colorrelief here. We'll use that as its own base layer since we're more concerned about elevation representation.
 
     ########################################
@@ -314,13 +345,17 @@ for WORLDNAME_PATH in world_list:
     # composite noland onto base images
     print(f"=== Compositing PNGs... {WORLDNAME} ===")
     print("Processing colorrelief...")
+    _t = time.time()
     file_conversion.composite_images(
         PNG_COLORRELIEF_FILE_PATH, PNG_NOLAND_FILE_PATH, PNG_COLORRELIEF_FILE_PATH
     )
+    print(f"[timer] composite colorrelief+noland: {_elapsed(_t)}", flush=True)
     print("Processing hillshade...")
+    _t = time.time()
     file_conversion.composite_images(
         PNG_HILLSHADE_BASE_FILE_PATH, PNG_NOLAND_FILE_PATH, PNG_TOPORELIEF_FILE_PATH
     )
+    print(f"[timer] composite hillshade+noland: {_elapsed(_t)}", flush=True)
 
     ########################################
 
@@ -340,10 +375,11 @@ for WORLDNAME_PATH in world_list:
     # render topo to folder root
     print('Generating tileset "topo" to subfolder...')
     zoom_level = zoom_level_for_image_size(WORLD_JSON.get("imageSize", 16384))
-
+    _t = time.time()
     run_command(
         f"gdal2tiles.py -p raster --xyz -z 0-{zoom_level} -w all -r lanczos -t {WORLDNAME}_topo {PNG_TOPO_FILE_PATH} {OUTPUT_FOLDER}",
     )
+    print(f"[timer] gdal2tiles topo: {_elapsed(_t)}", flush=True)
     # render dark, topo, and colorrelief to subfolders
     for outfile in [
         [PNG_DARK_FILE_PATH, "topoDark"],
@@ -352,9 +388,11 @@ for WORLDNAME_PATH in world_list:
     ]:
         image_path, folder_name = outfile
         print(f'Generating tileset "{folder_name}" to subfolder...')
+        _t = time.time()
         run_command(
             f"gdal2tiles.py -p raster --xyz -z 0-{zoom_level} -r lanczos -t {WORLDNAME}_{folder_name} {image_path} {os.path.join(OUTPUT_FOLDER, folder_name)}",
         )
+        print(f"[timer] gdal2tiles {folder_name}: {_elapsed(_t)}", flush=True)
 
     # we need to check the max zoom that was rendered. the auto-clamped max zoom will vary based on original image size, which here is paired to the worldSize in m. we'll then update the metadata with the maxZoom.
     print(f"=== Updating metadata... {WORLDNAME} ===")
@@ -484,7 +522,7 @@ for WORLDNAME_PATH in world_list:
         colorRelief_compression.join()
         print(f"ColorRelief compression finished (z{zoom}/{MAX_ZOOM}) (process 4/4)")
 
-    print("=== Completed tasks for", WORLDNAME, "===")
+    print(f"=== Completed tasks for {WORLDNAME} === [total: {_elapsed(_world_t)}]")
 
 
 print("Completed all tasks!")

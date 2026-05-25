@@ -114,30 +114,42 @@ def preprocess_svg(in_file, out_file):
     print("Forest count:", len(forest_polygon_els))
     print("Forest border count:", len(forest_border_els))
 
-    # pick the one that's greater
-    to_cull = (
-        ["forests", forest_polygon_els]
-        if len(forest_polygon_els) > len(forest_border_els)
-        else ["borders", forest_border_els]
-    )
+    FOREST_THRESHOLD = 250000
+    forests_over = len(forest_polygon_els) > FOREST_THRESHOLD
+    borders_over = len(forest_border_els) > FOREST_THRESHOLD
 
-    if len(to_cull[1]) > 250000:
-        print(
-            "Warning: Forest or forest border count is > 250000. Keeping the one with fewest features."
+    if forests_over or borders_over:
+        forest_borders_root = forests_root.find(
+            "./{http://www.w3.org/2000/svg}g[@id='forestBorder']"
         )
-
-        if to_cull[0] == "forests":
-            # remove forests
-            for forest in to_cull[1]:
-                forests_root.remove(forest)
-        else:
-            forest_borders_root = forests_root.find(
-                "./{http://www.w3.org/2000/svg}g[@id='forestBorders']"
+        if forests_over and borders_over:
+            print(
+                f"Warning: Both forests ({len(forest_polygon_els)}) and forest borders ({len(forest_border_els)}) "
+                f"exceed {FOREST_THRESHOLD}. Removing both."
             )
-            # remove forestborder
-            for forestborder in to_cull[1]:
-                forest_borders_root.remove(forestborder)
-        print("Removed", len(to_cull[1]), to_cull[0])
+            for forest in forest_polygon_els:
+                forests_root.remove(forest)
+            if forest_borders_root is not None:
+                for forestborder in forest_border_els:
+                    forest_borders_root.remove(forestborder)
+            print("Removed forests and forest borders.")
+        elif forests_over:
+            print(
+                f"Warning: Forest count ({len(forest_polygon_els)}) exceeds {FOREST_THRESHOLD}. "
+                f"Removing forests, keeping borders ({len(forest_border_els)})."
+            )
+            for forest in forest_polygon_els:
+                forests_root.remove(forest)
+            print("Removed", len(forest_polygon_els), "forests")
+        else:
+            print(
+                f"Warning: Forest border count ({len(forest_border_els)}) exceeds {FOREST_THRESHOLD}. "
+                f"Removing borders, keeping forests ({len(forest_polygon_els)})."
+            )
+            if forest_borders_root is not None:
+                for forestborder in forest_border_els:
+                    forest_borders_root.remove(forestborder)
+            print("Removed", len(forest_border_els), "forest borders")
 
     # breakpoint()
 

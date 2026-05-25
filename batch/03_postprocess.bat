@@ -1,5 +1,5 @@
 @echo off
-setlocal EnableExtensions
+setlocal EnableExtensions EnableDelayedExpansion
 
 rem RAMET step 3 — post-process intermediate exports into <Arma3>\ramet_output\{world}\.
 rem
@@ -29,9 +29,29 @@ if exist "%ARMA_ROOT%\@ocap_renderterrain\ocap_renderterrain_process.bat" (
     set "OCAP_BAT="
 )
 
+rem -------- Read render_worlds.txt → comma-separated list for ocap-rt --------
+set "RENDER_WORLDS_FILE=%SCRIPT_DIR%render_worlds.txt"
+set "RENDER_WORLDS="
+if exist "%RENDER_WORLDS_FILE%" (
+    for /f "usebackq eol=# tokens=*" %%W in ("%RENDER_WORLDS_FILE%") do (
+        if not "%%W"=="" (
+            if defined RENDER_WORLDS (
+                set "RENDER_WORLDS=!RENDER_WORLDS!,%%W"
+            ) else (
+                set "RENDER_WORLDS=%%W"
+            )
+        )
+    )
+)
+if defined RENDER_WORLDS (
+    echo [render_worlds.txt] Filtering render to: %RENDER_WORLDS%
+) else (
+    echo [render_worlds.txt] Empty or missing — rendering all worlds.
+)
+
 if defined OCAP_BAT (
     echo === ocap-rt Docker render ===
-    call "%OCAP_BAT%"
+    call "%OCAP_BAT%" "%RENDER_WORLDS%"
     if errorlevel 1 echo [WARN] Docker render exited with errors — continuing.
 )
 

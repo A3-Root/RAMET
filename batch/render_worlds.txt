@@ -1,0 +1,25 @@
+# ocap-renderterrain world render list. One CfgWorlds class name per line.
+# Comments (#) and blank lines ignored. Order = render order.
+# Leave empty to render all worlds found in ocap_exporter/.
+126map
+albasrah
+altis
+archie
+enoch
+fapovo
+ivanivokova
+lythium
+majan
+malden
+mog
+namalsk
+northtakistan
+pollo2
+sehreno
+stratis
+stubbhult
+tanoa
+tem_suursaariv
+tem_vinjesvingenc
+umb_traininggrounds
+wake
