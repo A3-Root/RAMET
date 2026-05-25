@@ -192,24 +192,24 @@ def render(sat_full: Path, geojson_dir: Path, out_tiles: Path, world_size: float
     written: list[str] = []
 
     print("[render_sat] tiling sat")
-    write_pyramid(sat, out_tiles / "sat")
+    write_pyramid(sat, out_tiles / "sat", fmt="webp")
     written.append("sat")
 
     print("[render_sat] generating sat_dark")
     dark = _make_dark(sat)
-    write_pyramid(dark, out_tiles / "sat_dark")
+    write_pyramid(dark, out_tiles / "sat_dark", fmt="webp")
     written.append("sat_dark")
 
     if geojson_dir.is_dir():
         print("[render_sat] generating baked_sat")
         baked = _apply_baked_overlays(sat, geojson_dir, world_size, _STYLE_LIGHT)
-        write_pyramid(baked, out_tiles / "baked_sat")
+        write_pyramid(baked, out_tiles / "baked_sat", fmt="webp")
         written.append("baked_sat")
         del baked
 
         print("[render_sat] generating baked_sat_dark")
         baked_dark = _apply_baked_overlays(dark, geojson_dir, world_size, _STYLE_DARK)
-        write_pyramid(baked_dark, out_tiles / "baked_sat_dark")
+        write_pyramid(baked_dark, out_tiles / "baked_sat_dark", fmt="webp")
         written.append("baked_sat_dark")
         del baked_dark
     else:

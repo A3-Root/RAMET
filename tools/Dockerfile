@@ -2,50 +2,54 @@
 # Bundles every CLI orchestrate.py reaches for so the operator only needs Docker:
 #   - tippecanoe (vector tile build, built from source — felt/tippecanoe)
 #   - pmtiles CLI (mbtiles -> pmtiles convert, GitHub release binary)
-#   - oxipng (PNG optimiser, built from source via cargo — multi-stage)
-#   - cwebp / pngquant (raster optimization, apt)
+#   - oxipng (PNG optimiser, pre-built musl binary)
+#   - cwebp / pngquant (raster optimization, apt — fallback for topo tiles)
 #   - Python 3.12 + lxml / pillow / numpy / pyyaml
 #
 # Build:  docker build -t ramet-postprocess:latest -f tools/Dockerfile .
 # Run:    docker run --rm -v <Arma3>:/work -e RAMET_ARMA_ROOT=/work \
 #                    ramet-postprocess:latest --all
-#
-# The image's ENTRYPOINT is orchestrate.py — anything after the image name
-# is passed straight through (e.g. --world altis, --skip-pmtiles).
 
-# ---- Stage 1: build oxipng ----
-FROM rust:slim-bookworm AS oxipng-builder
+# ---- Stage 1: build tippecanoe ----
+FROM debian:bookworm-slim AS tippecanoe-builder
 
-RUN apt-get update && apt-get install -y --no-install-recommends git \
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential git ca-certificates \
+        libsqlite3-dev zlib1g-dev \
     && rm -rf /var/lib/apt/lists/*
 
-RUN git clone https://github.com/oxipng/oxipng.git /tmp/oxipng \
-    && cd /tmp/oxipng \
-    && cargo build --release
+RUN git clone https://github.com/felt/tippecanoe.git /tmp/tippecanoe \
+    && make -C /tmp/tippecanoe -j$(nproc) \
+    && strip /tmp/tippecanoe/tippecanoe /tmp/tippecanoe/tile-join \
+    && make -C /tmp/tippecanoe install
 
-# ---- Stage 2: main runtime image ----
+# ---- Runtime image ----
 FROM python:3.12-slim-bookworm
 
 ENV DEBIAN_FRONTEND=noninteractive \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PIP_NO_CACHE_DIR=1
 
-# System deps + tippecanoe build deps.
+# Runtime deps only — no compiler, no -dev packages.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        ca-certificates curl tar build-essential git \
-        libsqlite3-dev zlib1g-dev \
+        ca-certificates curl tar \
+        libsqlite3-0 zlib1g \
         webp pngquant \
     && rm -rf /var/lib/apt/lists/*
 
-# tippecanoe — build from source (felt/tippecanoe, no bookworm package).
-RUN git clone https://github.com/felt/tippecanoe.git /tmp/tippecanoe \
-    && make -C /tmp/tippecanoe -j$(nproc) \
-    && make -C /tmp/tippecanoe install \
-    && rm -rf /tmp/tippecanoe \
-    && tippecanoe --version
+# tippecanoe binary from builder stage (no build tools in final image).
+COPY --from=tippecanoe-builder /usr/local/bin/tippecanoe /usr/local/bin/tippecanoe
+COPY --from=tippecanoe-builder /usr/local/bin/tile-join  /usr/local/bin/tile-join
+RUN tippecanoe --version
 
-# oxipng — copy binary from builder stage.
-COPY --from=oxipng-builder /tmp/oxipng/target/release/oxipng /usr/local/bin/oxipng
+# oxipng — pre-built musl binary (statically linked).
+ARG OXIPNG_VERSION=9.1.4
+RUN curl -fsSL -o /tmp/oxipng.tar.gz \
+        "https://github.com/oxipng/oxipng/releases/download/v${OXIPNG_VERSION}/oxipng-v${OXIPNG_VERSION}-x86_64-unknown-linux-musl.tar.gz" \
+    && tar -xzf /tmp/oxipng.tar.gz -C /usr/local/bin --strip-components=1 \
+    && chmod +x /usr/local/bin/oxipng \
+    && rm /tmp/oxipng.tar.gz \
+    && oxipng --version
 
 # pmtiles CLI — Protomaps go-pmtiles binary release for linux/amd64.
 ARG PMTILES_VERSION=1.22.2

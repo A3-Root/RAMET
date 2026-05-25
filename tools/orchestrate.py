@@ -24,6 +24,8 @@ import datetime
 import json
 import os
 import sys
+import time
+from concurrent.futures import ProcessPoolExecutor, FIRST_COMPLETED, wait as fut_wait
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -310,6 +312,14 @@ def _collect_worlds(roots: tuple[Path, ...]) -> list[str]:
     return sorted(worlds)
 
 
+def _run_world(args_tuple: tuple) -> dict:
+    world, gd, oraw, orend, out_root, skip_pmtiles, skip_slice, skip_optimize = args_tuple
+    try:
+        return process_world(world, gd, oraw, orend, out_root, skip_pmtiles, skip_slice, skip_optimize)
+    except Exception as exc:
+        return {"world": world, "ok": False, "errors": [str(exc)], "notes": []}
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--all", action="store_true", help="process every world found")
@@ -320,6 +330,8 @@ def main() -> int:
     ap.add_argument("--skip-pmtiles", action="store_true")
     ap.add_argument("--skip-slice", action="store_true")
     ap.add_argument("--skip-optimize", action="store_true")
+    ap.add_argument("--workers", type=int, default=4,
+                    help="parallel world workers (default 4; tune to available RAM)")
     args = ap.parse_args()
 
     grad_root, ocap_raw_root, ocap_rendered_root, default_out = _resolve_input_roots(args.from_reference)
@@ -336,17 +348,28 @@ def main() -> int:
         print(f"  looked in: {grad_root}, {ocap_raw_root}, {ocap_rendered_root}")
         return 2
 
+    world_args = [
+        (w,
+         grad_root / w if (grad_root / w).is_dir() else None,
+         ocap_raw_root / w if (ocap_raw_root / w).is_dir() else None,
+         ocap_rendered_root / w if (ocap_rendered_root / w).is_dir() else None,
+         out_root, args.skip_pmtiles, args.skip_slice, args.skip_optimize)
+        for w in target
+    ]
+
     results = []
-    for w in target:
-        gd = grad_root / w if (grad_root / w).is_dir() else None
-        oraw = ocap_raw_root / w if (ocap_raw_root / w).is_dir() else None
-        orend = ocap_rendered_root / w if (ocap_rendered_root / w).is_dir() else None
-        res = process_world(w, gd, oraw, orend, out_root,
-                            skip_pmtiles=args.skip_pmtiles,
-                            skip_slice=args.skip_slice,
-                            skip_optimize=args.skip_optimize)
-        results.append(res)
-        print(json.dumps(res, indent=2))
+    if args.workers == 1 or len(world_args) == 1:
+        for wa in world_args:
+            res = _run_world(wa)
+            results.append(res)
+            print(json.dumps(res, indent=2))
+    else:
+        with ProcessPoolExecutor(max_workers=args.workers) as pool:
+            futs = {pool.submit(_run_world, wa): wa[0] for wa in world_args}
+            for fut in as_completed(futs):
+                res = fut.result()
+                results.append(res)
+                print(json.dumps(res, indent=2))
 
     failed = [r for r in results if not r.get("ok")]
     return 1 if failed else 0

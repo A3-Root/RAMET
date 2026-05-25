@@ -79,6 +79,8 @@ def build_pmtiles(grad_meh_world_dir: Path, out_pmtiles: Path,
             "--drop-densest-as-needed",
             "--no-feature-limit",
             "--no-tile-size-limit",
+            "--read-parallel",
+            "--no-progress-indicator",
             "--force",
         ]
 
