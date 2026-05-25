@@ -312,6 +312,15 @@ def _collect_worlds(roots: tuple[Path, ...]) -> list[str]:
     return sorted(worlds)
 
 
+def _check_pause(pause_file: Path) -> None:
+    """Block until pause_file is removed, printing a one-time notice."""
+    if pause_file.exists():
+        print(f"[orchestrate] PAUSED — remove {pause_file} (or run resume_postprocess.bat) to continue", flush=True)
+        while pause_file.exists():
+            time.sleep(5)
+        print("[orchestrate] RESUMED", flush=True)
+
+
 def _run_world(args_tuple: tuple) -> dict:
     world, gd, oraw, orend, out_root, skip_pmtiles, skip_slice, skip_optimize = args_tuple
     try:
@@ -357,19 +366,38 @@ def main() -> int:
         for w in target
     ]
 
+    # Pause sentinel: create <Arma3>/ramet.pause on the host to pause between worlds.
+    pause_file = out_root.parent / "ramet.pause"
+
     results = []
     if args.workers == 1 or len(world_args) == 1:
         for wa in world_args:
+            _check_pause(pause_file)
             res = _run_world(wa)
             results.append(res)
             print(json.dumps(res, indent=2))
     else:
+        queue = list(world_args)
+        pending: dict = {}
+
         with ProcessPoolExecutor(max_workers=args.workers) as pool:
-            futs = {pool.submit(_run_world, wa): wa[0] for wa in world_args}
-            for fut in as_completed(futs):
-                res = fut.result()
-                results.append(res)
-                print(json.dumps(res, indent=2))
+            # Fill pool to capacity respecting pause.
+            def _fill():
+                while queue and len(pending) < args.workers:
+                    _check_pause(pause_file)
+                    wa = queue.pop(0)
+                    fut = pool.submit(_run_world, wa)
+                    pending[fut] = wa[0]
+
+            _fill()
+            while pending:
+                done, _ = fut_wait(pending.keys(), return_when=FIRST_COMPLETED)
+                for fut in done:
+                    pending.pop(fut)
+                    res = fut.result()
+                    results.append(res)
+                    print(json.dumps(res, indent=2), flush=True)
+                _fill()
 
     failed = [r for r in results if not r.get("ok")]
     return 1 if failed else 0
