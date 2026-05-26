@@ -43,9 +43,9 @@ COPY --from=tippecanoe-builder /usr/local/bin/tile-join  /usr/local/bin/tile-joi
 RUN tippecanoe --version
 
 # oxipng — pre-built musl binary (statically linked).
-ARG OXIPNG_VERSION=9.1.4
+ARG OXIPNG_VERSION=10.1.1
 RUN curl -fsSL -o /tmp/oxipng.tar.gz \
-        "https://github.com/oxipng/oxipng/releases/download/v${OXIPNG_VERSION}/oxipng-v${OXIPNG_VERSION}-x86_64-unknown-linux-musl.tar.gz" \
+        "https://github.com/oxipng/oxipng/releases/download/v${OXIPNG_VERSION}/oxipng-${OXIPNG_VERSION}-x86_64-unknown-linux-musl.tar.gz" \
     && tar -xzf /tmp/oxipng.tar.gz -C /usr/local/bin --strip-components=1 \
     && chmod +x /usr/local/bin/oxipng \
     && rm /tmp/oxipng.tar.gz \

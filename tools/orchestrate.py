@@ -207,9 +207,14 @@ def process_world(world: str,
         if mod is not None:
             try:
                 out_pmtiles = out_root / world / "vector" / "features.pmtiles"
-                manifest = mod.build_pmtiles(grad_dir, out_pmtiles,
+                manifest = mod.build_pmtiles(
+                                             grad_dir, out_pmtiles,
                                              max_zoom=map_json.get("maxZoom", 14),
-                                             min_zoom=map_json.get("minZoom", 0))
+                                             min_zoom=map_json.get("minZoom", 0),
+                                             anchor_lat=map_json.get("latitude"),
+                                             anchor_lon=map_json.get("longitude"),
+                                             world_size=map_json.get("worldSize"),
+                                         )
                 map_json["vectorSource"] = {
                     "type": "pmtiles",
                     "url": "vector/features.pmtiles",
