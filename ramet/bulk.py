@@ -1,19 +1,22 @@
 """Bulk-export loop control. Reads worlds.txt (from @root_amet/batch/),
-tracks completion in <Arma3>/ramet_state/bulk_state.json so the loop can
+tracks completion in <Arma3>/ramet_state/bulk_state.json (schema ramet-bulk-2,
+per-stage cells: grad_meh / ocap / ingame) so each pass can independently
 resume across crashes / Steam branch swaps.
 
 API (called from SQF via Archangel):
-    next_world()                     -> [str]   next pending world, or "" if exhausted
-    mark_done(world, ok, err="")     -> [bool]  record completion (ok='true'/'false')
-    log_progress(msg)                -> [bool]  append to ramet_bulk.log
+    next_world(stage)                        -> [str]   next pending world for the named stage
+    mark_done(stage, world, ok, err="")      -> [bool]  record per-stage completion
+    log_progress(msg)                        -> [bool]  append to ramet_bulk.log
+    export_summary(stage)                    -> [int, int, str]
 """
 
 from __future__ import annotations
 
 import datetime
-import json
 import threading
 from pathlib import Path
+
+from . import state as _state
 
 _LOCK = threading.Lock()
 
@@ -23,7 +26,6 @@ def _arma_root() -> Path:
 
 
 def _mod_root() -> Path:
-    """<Arma3>/@root_amet (this file lives at @root_amet/ramet/bulk.py)."""
     return Path(__file__).resolve().parents[1]
 
 
@@ -46,53 +48,49 @@ def _worlds_file() -> Path | None:
     return p if p.exists() else None
 
 
-def _load_state() -> dict:
-    f = _state_file()
-    if not f.exists():
-        return {"queue": [], "done": {}, "loaded_from": None}
-    try:
-        return json.loads(f.read_text(encoding="utf-8"))
-    except Exception:
-        return {"queue": [], "done": {}, "loaded_from": None}
-
-
-def _save_state(state: dict) -> None:
-    _state_file().write_text(json.dumps(state, indent=2), encoding="utf-8")
-
-
-def _ensure_queue(state: dict) -> dict:
-    if state["queue"]:
-        return state
+def _load_worlds() -> list[str]:
     wf = _worlds_file()
     if wf is None:
-        return state
+        return []
     raw = wf.read_text(encoding="utf-8").splitlines()
-    worlds = [ln.strip() for ln in raw if ln.strip() and not ln.strip().startswith("#")]
-    state["queue"] = worlds
-    state["loaded_from"] = str(wf)
-    _save_state(state)
-    return state
+    return [ln.strip() for ln in raw if ln.strip() and not ln.strip().startswith("#")]
 
 
-def next_world():
+def _load() -> dict:
+    s = _state.load(_state_file())
+    s = _state.ensure_queue(s, _load_worlds())
+    return s
+
+
+def _save(s: dict) -> None:
+    _state.save(_state_file(), s)
+
+
+def _stage(name: str) -> str:
+    name = (name or "").strip().lower()
+    if name in ("", "grad", "gradmeh", "grad_meh"):
+        return "grad_meh"
+    if name in ("ocap",):
+        return "ocap"
+    if name in ("ingame", "in_game", "in-game", "gms", "a3me"):
+        return "ingame"
+    return name  # fall through; state.py rejects unknown
+
+
+def next_world(stage: str = "grad_meh"):
     with _LOCK:
-        state = _ensure_queue(_load_state())
-        for world in state["queue"]:
-            if world.lower() not in {k.lower() for k in state.get("done", {}).keys()}:
-                return [world]
-        return [""]
+        s = _load()
+        w = _state.next_pending(s, _stage(stage))
+        _save(s)
+        return [w]
 
 
-def mark_done(world: str, ok: str = "true", err: str = ""):
+def mark_done(stage: str, world: str, ok: str = "true", err: str = ""):
     with _LOCK:
-        state = _load_state()
-        state.setdefault("done", {})[world] = {
-            "ok": str(ok).lower() == "true",
-            "err": err,
-            "ts": datetime.datetime.utcnow().isoformat() + "Z",
-        }
-        _save_state(state)
-        _append_log(f"mark_done {world} ok={ok} err={err!r}")
+        s = _load()
+        _state.mark_done(s, _stage(stage), world, str(ok).lower() == "true", err)
+        _save(s)
+        _append_log(f"mark_done stage={stage} {world} ok={ok} err={err!r}")
         return [True]
 
 
@@ -107,18 +105,14 @@ def log_progress(msg: str):
     return [True]
 
 
-def export_summary():
-    """Return [total, skipped, skipped_names_csv] for the completed bulk run."""
+def export_summary(stage: str = "grad_meh"):
     with _LOCK:
-        state = _load_state()
-        done = state.get("done", {})
-        total = len(done)
-        skipped = [w for w, v in done.items() if not v.get("ok", True)]
-        return [total, len(skipped), ", ".join(skipped)]
+        s = _load()
+        total, failed, names = _state.stage_summary(s, _stage(stage))
+        return [total, failed, ", ".join(names)]
 
 
 def reset_state():
-    """Manual recovery: delete state file. Callable from Python repl, not SQF."""
     f = _state_file()
     if f.exists():
         f.unlink()

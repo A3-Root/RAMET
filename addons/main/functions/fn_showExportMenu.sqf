@@ -18,11 +18,13 @@ if (!isNil "ramet_exportRunning" && {ramet_exportRunning}) exitWith {
 
 private _gradAvailable = !isNil "gradMehExportMap";
 private _ocapAvailable = !isNil "diag_exportTerrainSVG";
+private _ingameAvailable = !isNil "a3me_export";
 
 private _msg = format [
-    "Select bulk export mode.\n\nGrad_meh available: %1\nOCAP (diag) available: %2",
+    "Select bulk export mode.\n\nGrad_meh available: %1\nOCAP (diag) available: %2\nIn-Game (GMS) available: %3\n\n(In-Game export is run from the main-menu spotlight tile.)",
     ["NO — main branch needed", "YES"] select _gradAvailable,
-    ["NO — diagnostic branch needed", "YES"] select _ocapAvailable
+    ["NO — diagnostic branch needed", "YES"] select _ocapAvailable,
+    ["NO — @arma3MapExporter not loaded", "YES"] select _ingameAvailable
 ];
 
 [

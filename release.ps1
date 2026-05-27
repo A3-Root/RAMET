@@ -36,7 +36,7 @@ function Invoke-Hemtt {
 }
 
 if ($Clean) {
-    Get-ChildItem -Path "subprojects\grad_meh\.hemttout", "subprojects\ocap-renderterrain\.hemttout", ".hemttout", "releases" -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force
+    Get-ChildItem -Path "subprojects\grad_meh\.hemttout", "subprojects\ocap-renderterrain\.hemttout", "subprojects\arma3MapExporter\@arma3MapExporter\publish", ".hemttout", "releases" -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force
 }
 
 function Build-GradMehDll {
@@ -76,11 +76,30 @@ function Find-GradMehDll {
     return $null
 }
 
+function Build-Arma3MapExporter {
+    param([string]$Repo)
+    if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) {
+        Write-Warning "dotnet SDK not on PATH — @arma3MapExporter will not be rebuilt."
+        return $false
+    }
+    $csproj = Join-Path $Repo "MapExportExtension\MapExportExtension.csproj"
+    if (-not (Test-Path $csproj)) {
+        Write-Warning "$csproj not found — skipping arma3MapExporter build."
+        return $false
+    }
+    $out = Join-Path $Repo "@arma3MapExporter"
+    Write-Host "  > dotnet publish $csproj -> $out" -ForegroundColor DarkGray
+    & dotnet publish $csproj -r win-x64 -c Release -o $out
+    return ($LASTEXITCODE -eq 0)
+}
+
 if (-not $SkipSubprojects) {
     Write-Host "=== building subprojects/grad_meh ===" -ForegroundColor Cyan
     Invoke-Hemtt "subprojects\grad_meh"
     Write-Host "=== building subprojects/ocap-renderterrain ===" -ForegroundColor Cyan
     Invoke-Hemtt "subprojects\ocap-renderterrain"
+    Write-Host "=== building subprojects/arma3MapExporter (dotnet AOT) ===" -ForegroundColor Cyan
+    [void](Build-Arma3MapExporter -Repo (Join-Path $root "subprojects\arma3MapExporter"))
 }
 
 Write-Host "=== building RAMET ===" -ForegroundColor Cyan
@@ -142,6 +161,15 @@ if (Test-Path $ocapOut) {
     Copy-Item -Path $ocapOut -Destination (Join-Path $stagingRoot "@ocap_renderterrain") -Recurse
 } else {
     Write-Warning "$ocapOut missing — @ocap_renderterrain not bundled"
+}
+
+# 3) @arma3MapExporter — vendored copy + freshly published native AOT DLL.
+$a3meSrc = Join-Path $root "subprojects\arma3MapExporter\@arma3MapExporter"
+if (Test-Path $a3meSrc) {
+    Copy-Item -Path $a3meSrc -Destination (Join-Path $stagingRoot "@arma3MapExporter") -Recurse
+    Write-Host "  + staged @arma3MapExporter from $a3meSrc" -ForegroundColor DarkGray
+} else {
+    Write-Warning "$a3meSrc missing — @arma3MapExporter not bundled (run with build prereqs: .NET 10 SDK)"
 }
 
 # 4) Zip the bundle

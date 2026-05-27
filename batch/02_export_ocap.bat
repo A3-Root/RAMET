@@ -18,8 +18,8 @@ if not exist "%~dp0worlds.txt" (
     popd & exit /b 1
 )
 
-rem Reset bulk state so the ocap pass iterates the full list independently.
-if exist "%ARMA_ROOT%\ramet_state\bulk_state.json" del /q "%ARMA_ROOT%\ramet_state\bulk_state.json"
+rem Bulk state is per-stage (schema ramet-bulk-2) — no reset needed; the ocap
+rem pass advances only its own stage cell. Resume across crashes / re-runs is automatic.
 
 echo Launching Arma 3 (diag) for ocap-renderterrain bulk export...
 start "" "arma3diag_x64.exe" -mod=@root_amet;@grad_meh;@ocap_renderterrain;@intercept;@CBA_A3 -world=empty -nosound -noPause -nosplash -window

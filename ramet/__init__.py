@@ -4,4 +4,4 @@ SQF calls land as `"archangel" callExtension ["ramet.<submodule>.<fn>", [...]]`.
 Archangel routes that to ramet.<submodule>.<fn>(*args).
 """
 
-from . import bulk, kickoff  # noqa: F401
+from . import bulk, ingame, kickoff, state  # noqa: F401

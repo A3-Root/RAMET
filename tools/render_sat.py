@@ -17,9 +17,51 @@ import json
 from pathlib import Path
 
 import numpy as np
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, UnidentifiedImageError
 
 from tile_image import write_pyramid
+from raster_transform import (
+    LayerResult,
+    WorldMeta,
+    count_tiles,
+    output_pixel_size,
+    resample_source,
+)
+
+# Disable PIL decompression-bomb guard: sat exports from grad_meh are trusted.
+Image.MAX_IMAGE_PIXELS = None
+
+
+class SatSourceMissingError(FileNotFoundError):
+    """Sat source PNG missing or zero-byte."""
+
+
+class SatSourceCorruptError(RuntimeError):
+    """Sat source PNG present but unreadable / zero-sized after decode."""
+
+
+def validate_sat_source(path: Path) -> None:
+    """Fail fast with a distinct exception class per failure mode."""
+    if path is None or not path.exists():
+        raise SatSourceMissingError(f"sat source missing: {path}")
+    size = path.stat().st_size
+    if size == 0:
+        raise SatSourceMissingError(f"sat source zero-byte: {path}")
+    try:
+        with Image.open(path) as probe:
+            probe.verify()
+    except UnidentifiedImageError as exc:
+        raise SatSourceCorruptError(f"sat source unidentified: {path} ({exc})") from exc
+    except Exception as exc:
+        raise SatSourceCorruptError(f"sat source verify failed: {path} ({exc})") from exc
+    # Reopen for a real load probe (verify() leaves the file in an unloadable state).
+    try:
+        with Image.open(path) as probe2:
+            w, h = probe2.size
+    except Exception as exc:
+        raise SatSourceCorruptError(f"sat source size probe failed: {path} ({exc})") from exc
+    if w <= 0 or h <= 0:
+        raise SatSourceCorruptError(f"sat source has zero dimension: {path} ({w}x{h})")
 
 # Overlay style: (fill_rgb, fill_alpha, outline_rgb_or_None, outline_alpha)
 _STYLE_LIGHT = {
@@ -179,41 +221,63 @@ def _make_dark(sat: Image.Image) -> Image.Image:
     return Image.fromarray(out.astype(np.uint8), "RGBA")
 
 
-def render(sat_full: Path, geojson_dir: Path, out_tiles: Path, world_size: float) -> list[str]:
-    """Generate sat pyramids. Returns list of variant IDs written."""
-    if not sat_full.exists():
-        print(f"[render_sat] {sat_full} not found, skipping")
-        return []
+def _emit(layer_id: str, target: Path, ext: str = "webp") -> LayerResult:
+    total, zmin, zmax = count_tiles(target, ext)
+    return LayerResult(
+        layer_id=layer_id,
+        ext=ext,
+        min_zoom=zmin if zmin is not None else 0,
+        max_zoom=zmax if zmax is not None else 0,
+        tile_count=total,
+    )
+
+
+def render(sat_full: Path, geojson_dir: Path, out_tiles: Path, world_size: float) -> list[LayerResult]:
+    """Generate sat pyramids. Returns per-layer results (id, ext, zoom range, tile count).
+
+    Raises SatSourceMissingError / SatSourceCorruptError on bad input — caller decides
+    whether to swallow (and mark world partial) or re-raise.
+    """
+    validate_sat_source(sat_full)
 
     print(f"[render_sat] loading {sat_full.name} ({sat_full.stat().st_size // 1024 // 1024} MB)")
-    sat = Image.open(sat_full).convert("RGBA")
-    print(f"[render_sat] image {sat.width}×{sat.height}")
+    sat_raw = Image.open(sat_full).convert("RGBA")
+    print(f"[render_sat] image {sat_raw.width}×{sat_raw.height}")
 
-    written: list[str] = []
+    wm = WorldMeta(world_size_m=float(world_size), src_extent_m=float(world_size))
+    out_px = output_pixel_size(wm, source_width_px=sat_raw.width)
+    if (sat_raw.width, sat_raw.height) != (out_px, out_px):
+        print(f"[render_sat] resampling source -> authoritative {out_px}x{out_px}")
+        sat = resample_source(sat_raw, wm, out_px, resample=Image.BILINEAR)
+        del sat_raw
+    else:
+        sat = sat_raw
+
+    results: list[LayerResult] = []
 
     print("[render_sat] tiling sat")
     write_pyramid(sat, out_tiles / "sat", fmt="webp")
-    written.append("sat")
+    results.append(_emit("sat", out_tiles / "sat"))
 
     print("[render_sat] generating sat_dark")
     dark = _make_dark(sat)
     write_pyramid(dark, out_tiles / "sat_dark", fmt="webp")
-    written.append("sat_dark")
+    results.append(_emit("sat_dark", out_tiles / "sat_dark"))
 
     if geojson_dir.is_dir():
         print("[render_sat] generating baked_sat")
         baked = _apply_baked_overlays(sat, geojson_dir, world_size, _STYLE_LIGHT)
         write_pyramid(baked, out_tiles / "baked_sat", fmt="webp")
-        written.append("baked_sat")
+        results.append(_emit("baked_sat", out_tiles / "baked_sat"))
         del baked
 
         print("[render_sat] generating baked_sat_dark")
         baked_dark = _apply_baked_overlays(dark, geojson_dir, world_size, _STYLE_DARK)
         write_pyramid(baked_dark, out_tiles / "baked_sat_dark", fmt="webp")
-        written.append("baked_sat_dark")
+        results.append(_emit("baked_sat_dark", out_tiles / "baked_sat_dark"))
         del baked_dark
     else:
         print(f"[render_sat] no geojson dir at {geojson_dir}, skipping baked variants")
 
     del dark
-    return written
+    return results

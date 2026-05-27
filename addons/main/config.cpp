@@ -50,4 +50,14 @@ class CfgMainMenuSpotlight {
         actionText = "OPEN";
         condition = "true";
     };
+    class ramet_ingame {
+        text = "RAMET — In-Game export (GMS)";
+        textIsQuote = 0;
+        picture = "\x\arma3MapExporter\addons\exporter\data\spotlight_co.paa";
+        video = "";
+        // No GMS-side dialog; spin the bulk loop directly. SQF will pause until terminal.
+        action = "[] spawn ramet_fnc_bulkExportInGame;";
+        actionText = "RUN";
+        condition = "!isNil 'a3me_export'";
+    };
 };

@@ -133,10 +133,31 @@ def process_world(world: str,
     out_tiles = out_root / world / "tiles"
     existing_variant_ids = {layer["id"] for layer in map_json.get("rasterLayers", [])}
 
+    stage_results: dict[str, dict] = {}
+
+    def _append_layer_from_result(lr, label_map):
+        """Append manifest entry from a LayerResult; honour real ext + zoom."""
+        if lr.tile_count == 0:
+            print(f"[orchestrate] {world}: dropping zero-tile layer {lr.layer_id}")
+            return
+        if lr.layer_id in existing_variant_ids:
+            return
+        ext = lr.ext
+        map_json.setdefault("rasterLayers", []).append({
+            "id": lr.layer_id,
+            "path": f"tiles/{lr.layer_id}/{{z}}/{{x}}/{{y}}.{ext}",
+            "label": label_map.get(lr.layer_id, lr.layer_id.replace("_", " ").title()),
+            "category": "base",
+            "ext": ext,
+            "minZoom": lr.min_zoom,
+            "maxZoom": lr.max_zoom,
+        })
+        existing_variant_ids.add(lr.layer_id)
+
     # --- sat pyramids from grad_meh sat_full.png ---
     if grad_dir is not None:
         sat_full = grad_dir / "sat" / "sat_full.png"
-        if sat_full.exists() and world_size:
+        if world_size:
             mod = _safe_import_render_sat()
             if mod is not None:
                 try:
@@ -152,19 +173,19 @@ def process_world(world: str,
                         "baked_sat": "Baked Satellite",
                         "baked_sat_dark": "Baked Satellite Dark",
                     }
-                    for vid in written:
-                        if vid not in existing_variant_ids:
-                            map_json.setdefault("rasterLayers", []).append({
-                                "id": vid,
-                                "path": f"tiles/{vid}/{{z}}/{{x}}/{{y}}.png",
-                                "label": _SAT_LABELS.get(vid, vid.replace("_", " ").title()),
-                                "category": "base",
-                                "ext": "png",
-                            })
-                            existing_variant_ids.add(vid)
+                    for lr in written:
+                        _append_layer_from_result(lr, _SAT_LABELS)
+                    stage_results["render_sat"] = {"ok": True, "layers": [lr.layer_id for lr in written]}
+                except getattr(mod, "SatSourceMissingError", FileNotFoundError) as exc:
+                    print(f"[orchestrate] {world}: render_sat skipped — {exc}")
+                    stage_results["render_sat"] = {"ok": False, "reason": "missing", "err": str(exc)}
+                except getattr(mod, "SatSourceCorruptError", RuntimeError) as exc:
+                    print(f"[orchestrate] {world}: render_sat CORRUPT — {exc}")
+                    stage_results["render_sat"] = {"ok": False, "reason": "corrupt", "err": str(exc)}
                 except Exception as exc:
                     print(f"[orchestrate] {world}: render_sat failed — {exc}")
-        elif not world_size:
+                    stage_results["render_sat"] = {"ok": False, "reason": "error", "err": str(exc)}
+        else:
             print(f"[orchestrate] {world}: worldSize missing, skipping render_sat")
 
     # --- topo pyramids from grad_meh dem.asc.gz ---
@@ -188,18 +209,32 @@ def process_world(world: str,
                         "baked_topo": "Baked Topographic",
                         "baked_topo_dark": "Baked Topographic Dark",
                     }
-                    for vid in written:
-                        if vid not in existing_variant_ids:
-                            map_json.setdefault("rasterLayers", []).append({
-                                "id": vid,
-                                "path": f"tiles/{vid}/{{z}}/{{x}}/{{y}}.png",
-                                "label": _TOPO_LABELS.get(vid, vid.replace("_", " ").title()),
-                                "category": "base",
-                                "ext": "png",
-                            })
-                            existing_variant_ids.add(vid)
+                    for lr in written:
+                        _append_layer_from_result(lr, _TOPO_LABELS)
+                    stage_results["render_topo"] = {"ok": True, "layers": [lr.layer_id for lr in written]}
                 except Exception as exc:
                     print(f"[orchestrate] {world}: render_topo failed — {exc}")
+                    stage_results["render_topo"] = {"ok": False, "reason": "error", "err": str(exc)}
+
+    # --- ingame pyramid from arma3_mapexporter_output ---
+    ingame_root = None
+    if grad_dir is not None:
+        arma_root = grad_dir.parent.parent  # <Arma3>/grad_meh/<world>/.. -> <Arma3>
+        candidate = arma_root / "arma3_mapexporter_output" / world
+        if candidate.is_dir():
+            ingame_root = candidate
+    if ingame_root and world_size:
+        try:
+            import render_ingame  # type: ignore
+            lr = render_ingame.render(ingame_root, out_tiles, float(world_size))
+            if lr is not None:
+                _append_layer_from_result(lr, {"ingame": "In-Game"})
+                stage_results["render_ingame"] = {"ok": True}
+            else:
+                stage_results["render_ingame"] = {"ok": False, "reason": "no source"}
+        except Exception as exc:
+            print(f"[orchestrate] {world}: render_ingame skipped — {exc}")
+            stage_results["render_ingame"] = {"ok": False, "reason": "error", "err": str(exc)}
 
     # vector / pmtiles from grad_meh geojsons
     if grad_dir is not None and not skip_pmtiles:
@@ -261,14 +296,36 @@ def process_world(world: str,
                 layer["ext"] = "webp"
                 layer["path"] = f"tiles/{variant}/{{z}}/{{x}}/{{y}}.webp"
 
-    # per-layer actual maxZoom (tiles may not reach global maxZoom)
+    # per-layer actual min/maxZoom + drop zero-tile / missing layers
+    from raster_transform import count_tiles as _count_tiles
+    kept: list[dict] = []
     for layer in map_json.get("rasterLayers", []):
-        mz = _layer_max_zoom(out_tiles, layer["id"], layer.get("ext", "png"))
-        if mz is not None:
-            layer["maxZoom"] = mz
-    layer_zooms = [l["maxZoom"] for l in map_json.get("rasterLayers", []) if "maxZoom" in l]
+        vid = layer["id"]
+        ext = layer.get("ext", "png")
+        total, zmin, zmax = _count_tiles(out_tiles / vid, ext)
+        if total == 0:
+            # Try alternate ext (optimize may have flipped png -> webp).
+            alt = "webp" if ext == "png" else "png"
+            total, zmin, zmax = _count_tiles(out_tiles / vid, alt)
+            if total > 0:
+                ext = alt
+                layer["ext"] = ext
+                layer["path"] = f"tiles/{vid}/{{z}}/{{x}}/{{y}}.{ext}"
+        if total == 0:
+            print(f"[orchestrate] {world}: drop layer {vid} — zero tiles on disk")
+            continue
+        if zmin is not None:
+            layer["minZoom"] = zmin
+        if zmax is not None:
+            layer["maxZoom"] = zmax
+        kept.append(layer)
+    map_json["rasterLayers"] = kept
+    layer_zooms = [l["maxZoom"] for l in kept if "maxZoom" in l]
     if layer_zooms:
         map_json["maxZoom"] = max(layer_zooms)
+    layer_mins = [l["minZoom"] for l in kept if "minZoom" in l]
+    if layer_mins:
+        map_json["minZoom"] = min(layer_mins)
 
     # cellSize from DEM ASC header if meta.json didn't supply it
     if not map_json.get("cellSize"):
@@ -288,7 +345,7 @@ def process_world(world: str,
     }, indent=2), encoding="utf-8")
 
     errs, notes = verify_mod.verify_world(out_root / world)
-    return {"world": world, "ok": not errs, "errors": errs, "notes": notes}
+    return {"world": world, "ok": not errs, "errors": errs, "notes": notes, "stages": stage_results}
 
 
 def _resolve_input_roots(from_reference: bool) -> tuple[Path, Path, Path, Path]:

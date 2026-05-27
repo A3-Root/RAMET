@@ -16,13 +16,13 @@
 if (!isServer) exitWith {};
 
 private _next = {
-    private _r = "archangel" callExtension ["ramet.bulk.next_world", []];
+    private _r = "archangel" callExtension ["ramet.bulk.next_world", ["grad_meh"]];
     _r param [0, "", [""]]
 };
 
 private _markDone = {
     params ["_world", "_ok", ["_err", ""]];
-    "archangel" callExtension ["ramet.bulk.mark_done", [_world, str _ok, _err]];
+    "archangel" callExtension ["ramet.bulk.mark_done", ["grad_meh", _world, str _ok, _err]];
 };
 
 private _log = {
@@ -66,7 +66,7 @@ while {true} do {
     };
 };
 
-private _summary = "archangel" callExtension ["ramet.bulk.export_summary", []];
+private _summary = "archangel" callExtension ["ramet.bulk.export_summary", ["grad_meh"]];
 private _total   = _summary param [0, 0, [0]];
 private _skipped = _summary param [1, 0, [0]];
 private _names   = _summary param [2, "", [""]];

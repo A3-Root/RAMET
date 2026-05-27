@@ -17,6 +17,14 @@ echo.
 echo [PAUSE] When Arma reports completion in ramet_state\ramet_bulk.log, press any key.
 pause >nul
 
+echo === STEP 2b: in-game (GMS) export (Arma 3 MAIN branch — swap back from DIAG) ===
+echo [PAUSE] Swap Arma 3 to MAIN branch in Steam, then press any key to continue.
+pause >nul
+call "%SCRIPT_DIR%06_export_ingame.bat"
+echo.
+echo [PAUSE] When Arma reports completion in ramet_state\ramet_bulk.log, press any key.
+pause >nul
+
 echo === STEP 3: post-process ===
 call "%SCRIPT_DIR%03_postprocess.bat"
 if errorlevel 1 (

@@ -23,23 +23,82 @@ from pathlib import Path
 DEFAULT_MAX_ZOOM = 14
 DEFAULT_MIN_ZOOM = 0
 
+# Per-location-type tippecanoe minzoom. Anything not listed defaults to 4.
+_LOCATION_MINZOOM = {
+    "NameCityCapital": 0,
+    "NameCity": 0,
+    "NameTown": 2,
+    "NameVillage": 3,
+    "NameLocal": 4,
+    "NameMarine": 3,
+    "Hill": 5,
+    "Mount": 4,
+    "RockArea": 5,
+    "ViewPoint": 5,
+    "BorderCrossing": 4,
+    "Strategic": 3,
+    "StrongpointArea": 3,
+    "FlatArea": 5,
+    "FlatAreaCity": 4,
+    "FlatAreaCitySmall": 5,
+}
+_LOCATION_DEFAULT_MINZOOM = 4
+_LOCATION_LAYER = "labels"
+
+
+def _annotate_location_features(features: list, layer_name: str) -> None:
+    """For location layers, set per-feature `tippecanoe.minzoom` from `type`.
+
+    Tippecanoe consumes the well-known `tippecanoe` property to drive per-feature
+    zoom inclusion when an input has heterogeneous classes.
+    """
+    if not features:
+        return
+    for feat in features:
+        if not isinstance(feat, dict):
+            continue
+        props = feat.setdefault("properties", {}) or {}
+        loc_type = props.get("type") or layer_name
+        mz = _LOCATION_MINZOOM.get(loc_type, _LOCATION_DEFAULT_MINZOOM)
+        tippe = feat.setdefault("tippecanoe", {})
+        if isinstance(tippe, dict):
+            tippe.setdefault("minzoom", mz)
+            tippe.setdefault("layer", _LOCATION_LAYER)
+        feat["properties"] = props
+
 
 def _gunzip_to(src: Path, dst: Path) -> None:
     with gzip.open(src, "rb") as fp_in, dst.open("wb") as fp_out:
         shutil.copyfileobj(fp_in, fp_out)
 
 
-def _normalize_geojson(path: Path) -> None:
-    """Wrap a plain JSON array as a FeatureCollection in-place."""
+def _normalize_geojson(path: Path, layer_name: str | None = None) -> None:
+    """Wrap a plain JSON array as a FeatureCollection in-place; annotate
+    location-class features with per-feature `tippecanoe.minzoom` when the
+    input file lives under a `locations/` subtree.
+    """
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except Exception:
         return
     if isinstance(data, list):
-        path.write_text(
-            json.dumps({"type": "FeatureCollection", "features": data}),
-            encoding="utf-8",
-        )
+        features = data
+        data = {"type": "FeatureCollection", "features": features}
+    elif isinstance(data, dict):
+        features = data.get("features", []) or []
+    else:
+        return
+
+    is_locations = layer_name is not None and (
+        layer_name.startswith("name") or layer_name.lower() in {
+            l.lower() for l in _LOCATION_MINZOOM
+        } or "location" in layer_name.lower()
+    )
+    if is_locations:
+        _annotate_location_features(features, layer_name)
+        data["features"] = features
+
+    path.write_text(json.dumps(data), encoding="utf-8")
 
 
 def _has_features(geojson_path: Path) -> bool:
@@ -155,10 +214,18 @@ def build_pmtiles(
             "--no-tile-size-limit",
             "--read-parallel",
             "--no-progress-indicator",
+            "--include=name",
+            "--include=type",
+            "--include=nameSize",
             "--force",
         ]
 
+        # Collect location classes for merging into a single `labels` layer.
+        labels_features: list[dict] = []
+        labels_seen: set[str] = set()
+
         for src in sorted(grad_meh_world_dir.rglob("*.geojson*")):
+            is_location = "locations" in src.parts
             name = src.name
             if name.endswith(".geojson.gz"):
                 stem = name[:-len(".geojson.gz")]
@@ -171,13 +238,35 @@ def build_pmtiles(
             else:
                 continue
 
-            _normalize_geojson(staged)
+            _normalize_geojson(staged, layer_name=stem if is_location else None)
             if reproject:
                 _reproject_geojson(staged, anchor_lat, anchor_lon, world_size)
             if not _has_features(staged):
                 continue
+
+            if is_location:
+                try:
+                    payload = json.loads(staged.read_text(encoding="utf-8"))
+                except Exception:
+                    continue
+                feats = payload.get("features", []) if isinstance(payload, dict) else payload
+                for f in feats or []:
+                    if isinstance(f, dict):
+                        labels_features.append(f)
+                labels_seen.add(stem)
+                continue
+
             tippe_args += ["-L", f"{stem}:{staged}"]
             layers.append({"id": stem, "label": stem.replace("_", " ").title()})
+
+        if labels_features:
+            labels_path = tmp / "labels.geojson"
+            labels_path.write_text(
+                json.dumps({"type": "FeatureCollection", "features": labels_features}),
+                encoding="utf-8",
+            )
+            tippe_args += ["-L", f"{_LOCATION_LAYER}:{labels_path}"]
+            layers.append({"id": _LOCATION_LAYER, "label": "Labels"})
 
         if not layers:
             raise RuntimeError(f"no GeoJSON features found under {grad_meh_world_dir}")

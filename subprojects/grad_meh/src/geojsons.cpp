@@ -43,6 +43,10 @@ void writeLocations(const std::string& worldName, std::filesystem::path& basePat
         properties["radiusA"] = sqf::get_number(locationEntry >> "radiusA");
         properties["radiusB"] = sqf::get_number(locationEntry >> "radiusB");
         properties["angle"] = sqf::get_number(locationEntry >> "angle");
+        // RAMET: emit type + nameSize so downstream tippecanoe / planner can scale
+        // labels per location class (capital/city/village/hill/...).
+        properties["type"] = type;
+        properties["nameSize"] = sqf::get_number(locationEntry >> "size");
 
         pointFeature["properties"] = properties;
 

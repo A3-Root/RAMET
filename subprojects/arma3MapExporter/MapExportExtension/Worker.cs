@@ -1,0 +1,72 @@
+﻿using System.Globalization;
+
+namespace MapExportExtension
+{
+    internal static class Worker
+    {
+        private static MapExportSession? _session;
+
+        internal static string StatusString()
+        {
+            var s = MapExportSession.Status;
+            if (s == MapExportSession.ExportStatus.Error)
+            {
+                return "error:" + MapExportSession.LastError;
+            }
+            return s.ToString().ToLowerInvariant();
+        }
+
+        internal static void Message(string function, string[] args)
+        {
+            switch (function)
+            {
+                case "status":
+                    Extension.Callback("Status", StatusString());
+                    return;
+                case "start":
+                    _session?.Dispose();
+                    _session = new MapExportSession(
+                        ArmaSerializer.ParseString(args[0]) ?? string.Empty,
+                        double.Parse(args[1], CultureInfo.InvariantCulture),
+                        ArmaSerializer.ParseMixedArray(args[2]),
+                        ArmaSerializer.ParseString(args[4]) ?? string.Empty,
+                        ArmaSerializer.ParseDouble(args[5]),
+                        ArmaSerializer.ParseDouble(args[6]));
+                    return;
+                case "histart":
+                    _session?.HiResStart();
+                    return;
+                case "calibrate":
+                    _session?.Calibrate(
+                        ArmaSerializer.ParseDoubleArray(args[0]),
+                        ArmaSerializer.ParseDoubleArray(args[1]),
+                        ArmaSerializer.ParseDoubleArray(args[2]),
+                        int.Parse(args[3]),
+                        int.Parse(args[4]));
+                    return;
+                case "screenshot":
+                    _session?.ScreenShot(
+                        int.Parse(args[0]),
+                        int.Parse(args[1]),
+                        ArmaSerializer.ParseDoubleArray(args[2]),
+                        ArmaSerializer.ParseDoubleArray(args[3]));
+                    return;
+                case "stop":
+                    _session?.Stop();
+                    return;
+                case "histop":
+                    _session?.HiResStop();
+                    return;
+                case "dispose":
+                    if (_session != null)
+                    {
+                        _session.Pack();
+                        _session.Dispose();
+                        _session = null;
+                    }
+                    return;
+            }
+        }
+    }
+}
+

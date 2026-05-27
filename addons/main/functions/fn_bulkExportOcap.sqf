@@ -15,13 +15,13 @@
 if (!isServer) exitWith {};
 
 private _next = {
-    private _r = "archangel" callExtension ["ramet.bulk.next_world", []];
+    private _r = "archangel" callExtension ["ramet.bulk.next_world", ["ocap"]];
     _r param [0, "", [""]]
 };
 
 private _markDone = {
     params ["_world", "_ok", ["_err", ""]];
-    "archangel" callExtension ["ramet.bulk.mark_done", [_world, str _ok, _err]];
+    "archangel" callExtension ["ramet.bulk.mark_done", ["ocap", _world, str _ok, _err]];
 };
 
 private _log = {

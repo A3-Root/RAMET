@@ -21,6 +21,14 @@ import numpy as np
 from PIL import Image, ImageDraw
 
 from tile_image import write_pyramid
+from raster_transform import (
+    LayerResult,
+    WorldMeta,
+    count_tiles,
+    output_pixel_size,
+)
+
+Image.MAX_IMAGE_PIXELS = None
 
 # Baked overlay style: (fill_rgb, fill_alpha, outline_rgb_or_None, outline_alpha)
 _STYLE_LIGHT = {
@@ -239,13 +247,24 @@ def _apply_overlays(
     return result
 
 
+def _emit(layer_id: str, target: Path, ext: str = "png") -> LayerResult:
+    total, zmin, zmax = count_tiles(target, ext)
+    return LayerResult(
+        layer_id=layer_id,
+        ext=ext,
+        min_zoom=zmin if zmin is not None else 0,
+        max_zoom=zmax if zmax is not None else 0,
+        tile_count=total,
+    )
+
+
 def render(
     dem_path: Path,
     geojson_dir: Path,
     out_tiles: Path,
     world_size: float,
-) -> list[str]:
-    """Generate topo pyramids from DEM. Returns variant IDs written.
+) -> list[LayerResult]:
+    """Generate topo pyramids from DEM. Returns per-layer LayerResult list.
 
     topo / topo_dark are skipped if their output dirs already exist (ocap wins).
     baked_topo / baked_topo_dark are always generated.
@@ -260,9 +279,8 @@ def render(
     h, w = elevation.shape
     print(f"[render_topo] DEM {w}×{h}, cellsize={cellsize}m")
 
-    written: list[str] = []
+    results: list[LayerResult] = []
 
-    # Plain topo — generate only when ocap-rt didn't already write this variant
     plain_variants = [("topo", False), ("topo_dark", True)]
     topo_img: Image.Image | None = None
     topo_dark_img: Image.Image | None = None
@@ -275,45 +293,42 @@ def render(
         print(f"[render_topo] generating {variant_id}")
         img = _build_topo(elevation, cellsize, dark=is_dark)
         write_pyramid(img, target)
-        written.append(variant_id)
+        results.append(_emit(variant_id, target))
         if variant_id == "topo":
             topo_img = img
         else:
             topo_dark_img = img
 
-    # Baked variants — always generate (unique to this pipeline)
     if not geojson_dir.is_dir():
         print(f"[render_topo] no geojson dir at {geojson_dir}, skipping baked variants")
-        return written
+        return results
 
-    # Ensure we have the base images (may need to generate even if plain was skipped)
     if topo_img is None:
         print("[render_topo] generating topo base for baked overlay")
         topo_img = _build_topo(elevation, cellsize, dark=False)
-
     if topo_dark_img is None:
         print("[render_topo] generating topo_dark base for baked overlay")
         topo_dark_img = _build_topo(elevation, cellsize, dark=True)
 
-    # Upscale DEM-rendered base to world resolution so baked_topo tiles reach the
-    # same zoom depth as topo and sat (DEM is ~2048px; world may be 6144–12288px).
-    ws = int(world_size)
-    if topo_img.width != ws:
-        print(f"[render_topo] upscaling topo base {topo_img.width}px → {ws}px")
-        topo_img = topo_img.resize((ws, ws), Image.LANCZOS)
-    if topo_dark_img.width != ws:
-        topo_dark_img = topo_dark_img.resize((ws, ws), Image.LANCZOS)
+    # Resize DEM-rendered base to the authoritative pyramid size derived from worldSize.
+    wm = WorldMeta(world_size_m=float(world_size), src_extent_m=float(world_size))
+    out_px = output_pixel_size(wm, source_width_px=max(topo_img.width, int(world_size)))
+    if topo_img.width != out_px:
+        print(f"[render_topo] upscaling topo base {topo_img.width}px -> {out_px}px")
+        topo_img = topo_img.resize((out_px, out_px), Image.LANCZOS)
+    if topo_dark_img.width != out_px:
+        topo_dark_img = topo_dark_img.resize((out_px, out_px), Image.LANCZOS)
 
     print("[render_topo] generating baked_topo")
     baked = _apply_overlays(topo_img, geojson_dir, world_size, _STYLE_LIGHT)
     write_pyramid(baked, out_tiles / "baked_topo")
-    written.append("baked_topo")
+    results.append(_emit("baked_topo", out_tiles / "baked_topo"))
     del baked
 
     print("[render_topo] generating baked_topo_dark")
     baked_dark = _apply_overlays(topo_dark_img, geojson_dir, world_size, _STYLE_DARK)
     write_pyramid(baked_dark, out_tiles / "baked_topo_dark")
-    written.append("baked_topo_dark")
+    results.append(_emit("baked_topo_dark", out_tiles / "baked_topo_dark"))
     del baked_dark
 
-    return written
+    return results

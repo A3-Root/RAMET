@@ -1,0 +1,8 @@
+{
+  "_doc": "Per-world overrides for ingame pipeline. worldSizeSource: 'gms' | 'grad_meh'. scaleFactor multiplies GMS world coords into RAMET world coords.",
+  "_default": {
+    "worldSizeSource": "grad_meh",
+    "scaleFactor": 1.0
+  },
+  "worlds": {}
+}

@@ -2,9 +2,7 @@
 setlocal EnableExtensions
 
 rem RAMET step 4 — copy <Arma3>\ramet_output\ into JSOC-OPS-Warlords\server\warlords\map_tiles\.
-rem
-rem Tries the ramet-postprocess Docker image first (no host Python needed); falls back
-rem to a local `python` if Docker isn't running.
+rem Host Python only (deploy_to_planner.py is stdlib-only — no Docker needed).
 
 set "SCRIPT_DIR=%~dp0"
 pushd "%SCRIPT_DIR%.." >nul
@@ -13,30 +11,15 @@ popd >nul
 pushd "%SCRIPT_DIR%..\.." >nul
 set "ARMA_ROOT=%CD%"
 
-set "JSOC_ROOT=G:\Games\Arma 3\# Git\JSOC-OPS-Warlords"
-set "PLANNER_DEFAULT=%JSOC_ROOT%\server\warlords\map_tiles"
-
-docker info >nul 2>nul
-if not errorlevel 1 (
-    echo === deploy via Docker ===
-    docker run --rm ^
-        -v "%ARMA_ROOT%":/work ^
-        -v "%PLANNER_DEFAULT%":/planner ^
-        -e RAMET_ARMA_ROOT=/work ^
-        --entrypoint python ^
-        ramet-postprocess:latest /app/tools/deploy_to_planner.py ^
-        --output /work/ramet_output --planner-root /planner %*
-    set "RC=%ERRORLEVEL%"
-) else (
-    where python >nul 2>nul || (
-        echo [ERR] Neither Docker nor Python available on host.
-        popd & exit /b 1
-    )
-    echo === deploy via host Python ===
-    set "RAMET_ARMA_ROOT=%ARMA_ROOT%"
-    python "%RAMET_ROOT%\tools\deploy_to_planner.py" %*
-    set "RC=%ERRORLEVEL%"
+where python >nul 2>nul || (
+    echo [ERR] python not on PATH — install Python 3.10+ on host.
+    popd & exit /b 1
 )
+
+echo === deploy via host Python ===
+set "RAMET_ARMA_ROOT=%ARMA_ROOT%"
+python "%RAMET_ROOT%\tools\deploy_to_planner.py" %*
+set "RC=%ERRORLEVEL%"
 
 popd
 endlocal & exit /b %RC%
