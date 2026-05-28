@@ -18,7 +18,7 @@ if !(isNull _textCtrl) then {
 
 	_textCtrl ctrlSetStructuredText parseText format [
 		"
-<t size='15'><img image='\x\grad_meh\addons\ui\data\logo_ca.paa'/></t><br />
+<t size='15'><img image='\z\root_amet\addons\main\data\logo_grad_meh_ca.paa'/></t><br />
 <t size='5'>EXPORT FINISHED</t><br />
 <t color='%1' size='1.2'>with %2 errors</t><br />
 <br /><br /><t size='1.2' color='#AAAAAA'>%3 LOGS %3</t>

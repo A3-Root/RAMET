@@ -26,6 +26,10 @@ class Extended_PostInit_EventHandlers {
     };
 };
 
+#include "script_images.hpp"
+
+#include "dialogs\ingame_main.hpp"
+
 // Two main-menu spotlight tiles — RAMET reuses the upstream mods' own dialogs.
 // Each tile directly opens the corresponding mod's existing UI; no custom
 // dialog, no auto-popup, no script. Matches the pattern grad_meh and
@@ -35,7 +39,7 @@ class CfgMainMenuSpotlight {
     class ramet_grad_meh {
         text = "RAMET — Grad_meh export";
         textIsQuote = 0;
-        picture = "\x\grad_meh\addons\ui\data\spotlight_co.paa";
+        picture = RAMET_IMG_SPOTLIGHT_GRAD_MEH;
         video = "";
         action = "params ['_ctrl']; (ctrlParent _ctrl) createDisplay 'grad_meh_main';";
         actionText = "OPEN";
@@ -44,7 +48,7 @@ class CfgMainMenuSpotlight {
     class ramet_ocap {
         text = "RAMET — OCAP export (diag)";
         textIsQuote = 0;
-        picture = "\x\ocap_renderterrain\addons\ui\data\spotlight_co.paa";
+        picture = RAMET_IMG_SPOTLIGHT_OCAP;
         video = "";
         action = "params ['_ctrl']; (ctrlParent _ctrl) createDisplay 'ocap_renderterrain_main';";
         actionText = "OPEN";
@@ -53,11 +57,10 @@ class CfgMainMenuSpotlight {
     class ramet_ingame {
         text = "RAMET — In-Game export (GMS)";
         textIsQuote = 0;
-        picture = "\x\arma3MapExporter\addons\exporter\data\spotlight_co.paa";
+        picture = RAMET_IMG_SPOTLIGHT_INGAME;
         video = "";
-        // No GMS-side dialog; spin the bulk loop directly. SQF will pause until terminal.
-        action = "[] spawn ramet_fnc_bulkExportInGame;";
-        actionText = "RUN";
-        condition = "!isNil 'a3me_export'";
+        action = "params ['_ctrl']; (ctrlParent _ctrl) createDisplay 'ramet_ingame_main';";
+        actionText = "OPEN";
+        condition = "true";
     };
 };
