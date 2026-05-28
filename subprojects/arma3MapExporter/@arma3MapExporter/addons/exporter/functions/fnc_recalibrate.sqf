@@ -12,7 +12,7 @@ _w = _w / 2;
 private _dbg = [_zoom, _deltaX, _deltaY, _h, _w];
 INFO_1("%1",_dbg);
 
-private _mapDisplay = if (!isNull (findDisplay 9801)) then { findDisplay 9801 } else { findDisplay 12 };
+private _mapDisplay = if (isNull (findDisplay 9801)) then { findDisplay 12 } else { findDisplay 9801 };
 private _control = _mapDisplay displayCtrl 51;
 _control ctrlMapAnimAdd [0, _zoom, [_deltaX,_deltaY]];
 ctrlMapAnimCommit _control;
@@ -21,7 +21,7 @@ sleep 0.5;
 private _posA = _control ctrlMapWorldToScreen [0,0];
 private _posB = _control ctrlMapWorldToScreen [_w,_h];
 
-INFO_2("zoom=%1 dx=%2", _zoom, (_posB select 0) - (_posA select 0));
+INFO_2("zoom=%1 dx=%2",_zoom,(_posB select 0) - (_posA select 0));
 
 _control ctrlMapAnimAdd [0, _zoom, [_deltaX,_deltaY]];
 ctrlMapAnimCommit _control;
@@ -30,7 +30,7 @@ sleep 0.5;
 _posA = _control ctrlMapWorldToScreen [0,0];
 _posB = _control ctrlMapWorldToScreen [_w,_h];
 
-INFO_2("zoom=%1 dx=%2", _zoom, (_posB select 0) - (_posA select 0));
+INFO_2("zoom=%1 dx=%2",_zoom,(_posB select 0) - (_posA select 0));
 
 private _args = [
 	[safeZoneXAbs, safeZoneY, safeZoneWAbs, safeZoneH],

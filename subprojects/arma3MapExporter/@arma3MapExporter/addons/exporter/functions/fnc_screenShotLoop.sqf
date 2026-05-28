@@ -5,7 +5,7 @@ INFO("ScreenShotLoop");
 params ["_zoom","_deltaX", "_deltaY", "_w", "_h"];
 private _x = 0;
 private _y = 0;
-private _mapDisplay = if (!isNull (findDisplay 9801)) then { findDisplay 9801 } else { findDisplay 12 };
+private _mapDisplay = if (isNull (findDisplay 9801)) then { findDisplay 12 } else { findDisplay 9801 };
 private _control = _mapDisplay displayCtrl 51;
 while { _x <= worldSize } do {
 	_y = 0;
