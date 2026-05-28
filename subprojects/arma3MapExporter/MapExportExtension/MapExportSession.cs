@@ -20,6 +20,10 @@ namespace MapExportExtension
         [return: MarshalAs(UnmanagedType.Bool)]
         private static extern bool ClientToScreen(nint hWnd, ref POINT lpPoint);
 
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool SetCursorPos(int x, int y);
+
         [StructLayout(LayoutKind.Sequential)]
         private struct POINT
         {
@@ -91,7 +95,9 @@ namespace MapExportExtension
             }
             else
             {
-                _dataPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Arma3MapExporter", "maps", _map.MapName);
+                var arma3Root = Path.GetDirectoryName(System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName)
+                    ?? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+                _dataPath = Path.Combine(arma3Root, "ramet_ingame_output", _map.MapName);
             }
             Directory.CreateDirectory(_dataPath);
             SetStatus(ExportStatus.Running);
@@ -104,7 +110,9 @@ namespace MapExportExtension
             {
                 return overrideBase;
             }
-            return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Arma3MapExporter", "maps");
+            var arma3Root = Path.GetDirectoryName(System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName)
+                ?? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            return Path.Combine(arma3Root, "ramet_ingame_output");
         }
 
         public void Calibrate(double[] safeZone, double[] pA, double[] pB, int w, int h)
@@ -290,6 +298,7 @@ namespace MapExportExtension
 
         private Image TakeScreenShot()
         {
+            SetCursorPos(_screenX, _screenY + _screenH - 1);
             using var bitmap = new System.Drawing.Bitmap(_screenW, _screenH);
             using (var g = System.Drawing.Graphics.FromImage(bitmap))
             {
