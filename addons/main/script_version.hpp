@@ -6,7 +6,7 @@
 
 #define MAJOR 1
 #define MINOR 2
-#define PATCH 2
+#define PATCH 3
 #define BUILD 0
 
 #define VERSION MAJOR.MINOR.PATCH.BUILD

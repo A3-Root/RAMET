@@ -27,7 +27,9 @@ namespace MapExportExtension
         private static void Output(nint output, int outputSize, string data)
         {
             var bytes = Encoding.UTF8.GetBytes(data);
-            Marshal.Copy(bytes, 0, output, Math.Min(bytes.Length, outputSize));
+            var len = Math.Min(bytes.Length, outputSize - 1);
+            Marshal.Copy(bytes, 0, output, len);
+            Marshal.WriteByte(output, len, 0);
         }
 
         [UnmanagedCallersOnly(EntryPoint = "RVExtension")]
