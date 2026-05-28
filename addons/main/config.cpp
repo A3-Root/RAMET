@@ -28,7 +28,32 @@ class Extended_PostInit_EventHandlers {
 
 #include "script_images.hpp"
 
+class ctrlControlsGroupNoScrollbars;
+class ctrlControlsGroupNoHScrollbars;
+class ctrlStatic;
+class ctrlStaticBackground;
+class ctrlStaticTitle;
+class ctrlStaticFooter;
+class ctrlStaticPictureKeepAspect;
+class ctrlButton;
+class ctrlButtonOK;
+class ctrlButtonCancel;
+
+#include "controls\mapItem.hpp"
 #include "dialogs\ingame_main.hpp"
+
+class CfgFunctions {
+    class root_amet {
+        class ingame_ui {
+            file = "\z\root_amet\addons\main\functions";
+            class ingameMain_onLoad {};
+            class ingameMain_onUnLoad {};
+            class ingameMapItem_create {};
+            class ingameMapItem_onClick {};
+            class ingameExport {};
+        };
+    };
+};
 
 // Two main-menu spotlight tiles — RAMET reuses the upstream mods' own dialogs.
 // Each tile directly opens the corresponding mod's existing UI; no custom

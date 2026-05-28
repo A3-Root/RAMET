@@ -1,32 +1,58 @@
 /*
- * Author: Root
- * Description: onUnLoad handler for ramet_ingame_main dialog.
- *              Collects selected worlds from map tiles and kicks off
- *              ramet_fnc_ingameExport. Mirrors grad_meh_fnc_main_onUnLoad.
+ * Author: Root (adapted from DerZade / grad_meh)
+ * onUnLoad handler for ramet_ingame_main dialog.
+ * Collects selected worlds and triggers ingame export, or re-opens on empty selection.
  *
  * Arguments:
  * 0: Display <DISPLAY>
- * 1: Exit code (1 = Export, 0 = Cancel) <NUMBER>
+ * 1: Exit code (1 = OK, 0 = Cancel) <NUMBER>
  *
  * Public: No
  */
+#include "../idcmacros.hpp"
 
 params ["_display", "_exitCode"];
 
+diag_log format ["[RAMET ingame] onUnLoad fired — exitCode=%1", _exitCode];
+
+private _contentGrp = _display displayCtrl IDC_DIALOG_CONTENT;
+diag_log format ["[RAMET ingame] contentGrp=%1 controls=%2", _contentGrp, count (allControls _contentGrp)];
+
 private _maps = [];
 {
-    if (_x getVariable ["grad_meh_selected", false]) then {
-        private _worldName = _x getVariable ["grad_meh_worldName", ""];
-        if (_worldName != "") then { _maps pushBack _worldName; };
-    };
-} forEach (allControls _display);
+	private _selected = _x getVariable ["ramet_ingame_selected", false];
+	if (_selected) then {
+		_maps pushBack (_x getVariable ["ramet_ingame_worldName", ""]);
+	};
+} forEach (allControls _contentGrp);
 
 uiNamespace setVariable ["ramet_ingame_selectedMaps", _maps];
+diag_log format ["[RAMET ingame] maps collected=%1", _maps];
 
-if (_exitCode != 1) exitWith {};
+if (_exitCode isEqualTo 1) then {
+	if (count _maps isEqualTo 0) then {
+		(displayParent _display) spawn { _this createDisplay "ramet_ingame_main"; };
+	} else {
+		[_maps] call (uiNamespace getVariable "root_amet_fnc_ingameExport");
+	};
+} else {
+	[displayParent _display] spawn {
+		params ["_parent"];
 
-if (_maps isEqualTo []) exitWith {
-    (displayParent _display) spawn { _this createDisplay "ramet_ingame_main"; };
+		if (isNil "BIS_fnc_guiMessage") exitWith {
+			_parent createDisplay "ramet_ingame_main";
+		};
+
+		private _result = [
+			"Are you sure you want to quit the In-Game Export menu?",
+			"Quit In-Game Export",
+			true,
+			true,
+			_parent
+		] call (uiNamespace getVariable "BIS_fnc_guiMessage");
+
+		if (_result) exitWith {};
+
+		_parent createDisplay "ramet_ingame_main";
+	};
 };
-
-[_maps] call ramet_fnc_ingameExport;
