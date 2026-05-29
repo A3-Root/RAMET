@@ -16,9 +16,12 @@ where python >nul 2>nul || (
     popd & exit /b 1
 )
 
+set "JSOC_ROOT=G:\Games\Arma 3\# Git\JSOC-OPS-Warlords"
+set "PLANNER_DEFAULT=%JSOC_ROOT%\server\warlords\map_tiles"
+
 echo === deploy via host Python ===
 set "RAMET_ARMA_ROOT=%ARMA_ROOT%"
-python "%RAMET_ROOT%\tools\deploy_to_planner.py" %*
+python "%RAMET_ROOT%\tools\deploy_to_planner.py" --planner-root "%PLANNER_DEFAULT%" %*
 set "RC=%ERRORLEVEL%"
 
 popd

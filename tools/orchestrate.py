@@ -327,6 +327,10 @@ def process_world(world: str,
     layer_zooms = [l["maxZoom"] for l in kept if "maxZoom" in l]
     if layer_zooms:
         map_json["maxZoom"] = max(layer_zooms)
+        canonical_px = 256 * (2 ** map_json["maxZoom"])
+        map_json["imageSize"] = canonical_px
+        if world_size:
+            map_json["multiplier"] = canonical_px / float(world_size)
     layer_mins = [l["minZoom"] for l in kept if "minZoom" in l]
     if layer_mins:
         map_json["minZoom"] = min(layer_mins)

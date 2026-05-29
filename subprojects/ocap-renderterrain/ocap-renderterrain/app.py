@@ -161,7 +161,7 @@ for WORLDNAME_PATH in world_list:
 
     print("WORLD_JSON", json.dumps(WORLD_JSON, indent=4))
     WORLD_JSON["worldSize"] = math.ceil(WORLD_JSON["worldSize"])
-    WORLD_JSON["imageSize"] = min(WORLD_JSON["worldSize"], render_max_size)
+    WORLD_JSON["imageSize"] = min(max(WORLD_JSON["worldSize"], 16384), render_max_size)
     WORLD_JSON["multiplier"] = WORLD_JSON["imageSize"] / WORLD_JSON["worldSize"]
     print(
         f"Render settings: mode=full, maxSize={render_max_size}, "

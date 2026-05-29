@@ -68,9 +68,6 @@ def write_pyramid(
             break
         level_img = level_img.resize((nw, nh), Image.LANCZOS)
 
-    if level_img is not levels[-1]:
-        levels.append(level_img)
-
     with ThreadPoolExecutor(max_workers=_WORKERS) as pool:
         for z, img_at_level in enumerate(reversed(levels)):
             lw, lh = img_at_level.size
