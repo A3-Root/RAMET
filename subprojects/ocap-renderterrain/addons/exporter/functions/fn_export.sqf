@@ -122,6 +122,7 @@ uiNamespace setVariable ["ocap_renderterrain_fnc_startMission", {
 				} forEach allDisplays;
 
 				if (_nextIndex < count _maps) then {
+					uiNamespace setVariable ["ramet_ingame_autoCloseDebriefing", true];
 					[_maps select _nextIndex] call (uiNamespace getVariable "ocap_renderterrain_fnc_startMission");
 				} else {
 					uiNamespace setVariable ["ocap_renderterrain_maps", nil];
@@ -130,6 +131,7 @@ uiNamespace setVariable ["ocap_renderterrain_fnc_startMission", {
 					systemChat "[OCAP RenderTerrain]: Bulk export finished";
 				};
 
+				uiNamespace setVariable ["ramet_ingame_autoCloseDebriefing", true];
 				failMission "END1";
 			};
 		},
@@ -147,4 +149,5 @@ private _zero = findDisplay 0;
 	};
 } forEach allDisplays;
 
+uiNamespace setVariable ["ramet_ingame_autoCloseDebriefing", true];
 failMission "END1";
