@@ -21,8 +21,37 @@ if (_maps isEqualTo []) exitWith {};
 
 uiNamespace setVariable ["ramet_ingame_maps", +_maps];
 uiNamespace setVariable ["ramet_ingame_index", 0];
+// Enable auto-close of RscDisplayDebriefing for the duration of bulk export.
+// Cleared by ramet_ingame_fnc_closeDebriefing (XEH_preInit) after each close,
+// and re-armed here for each subsequent world via BIS_fnc_endMission below.
+uiNamespace setVariable ["ramet_ingame_autoCloseDebriefing", true];
 
 disableSerialization;
+
+// Registers a one-shot "Ended" mission EH for diagnostic logging and fallback close,
+// then calls BIS_fnc_endMission. Both this EH and the RscDisplayDebriefing onLoad
+// config patch attempt to close IDD 58 — whichever fires will be visible in RPT.
+uiNamespace setVariable ["ramet_ingame_fnc_endWithDiag", {
+	addMissionEventHandler ["Ended", {
+		params ["_endType"];
+		diag_log format ["[RAMET ingame]: [Ended EH] fired — endType=%1", _endType];
+		diag_log format ["[RAMET ingame]: [Ended EH] allDisplays: %1", str allDisplays];
+		private _nsKeys = ["GUI_displays", "IGUI_displays", "Loading_displays"];
+		{
+			private _nsDisplays = uiNamespace getVariable [_x, []];
+			if (count _nsDisplays > 0) then {
+				diag_log format ["[RAMET ingame]: [Ended EH] uiNamespace[%1]: %2", _x, str (_nsDisplays apply { ctrlIDD _x })];
+			};
+		} forEach _nsKeys;
+		{
+			if (ctrlIDD _x == 58) then {
+				diag_log "[RAMET ingame]: [Ended EH] Found IDD 58 — closing";
+				_x closeDisplay 1;
+			};
+		} forEach allDisplays;
+	}];
+	["END1", false, false, false] call BIS_fnc_endMission;
+}];
 
 uiNamespace setVariable ["ramet_ingame_fnc_startMission", {
 	params [["_world", worldName]];
@@ -58,6 +87,7 @@ uiNamespace setVariable ["ramet_ingame_fnc_startMission", {
 					{ if (_x != _zero) then { _x closeDisplay 1; }; } forEach allDisplays;
 
 					if (_nextIndex < count _maps) then {
+						uiNamespace setVariable ["ramet_ingame_autoCloseDebriefing", true];
 						[_maps select _nextIndex] call (uiNamespace getVariable "ramet_ingame_fnc_startMission");
 					} else {
 						uiNamespace setVariable ["ramet_ingame_maps", nil];
@@ -66,7 +96,7 @@ uiNamespace setVariable ["ramet_ingame_fnc_startMission", {
 						systemChat "[RAMET ingame]: Bulk export finished (with errors).";
 					};
 
-					failMission "END1";
+					call (uiNamespace getVariable "ramet_ingame_fnc_endWithDiag");
 				};
 
 				[] spawn a3me_export;
@@ -103,6 +133,7 @@ uiNamespace setVariable ["ramet_ingame_fnc_startMission", {
 				{ if (_x != _zero) then { _x closeDisplay 1; }; } forEach allDisplays;
 
 				if (_nextIndex < count _maps) then {
+					uiNamespace setVariable ["ramet_ingame_autoCloseDebriefing", true];
 					[_maps select _nextIndex] call (uiNamespace getVariable "ramet_ingame_fnc_startMission");
 				} else {
 					uiNamespace setVariable ["ramet_ingame_maps", nil];
@@ -111,7 +142,7 @@ uiNamespace setVariable ["ramet_ingame_fnc_startMission", {
 					systemChat "[RAMET ingame]: Bulk export complete.";
 				};
 
-				failMission "END1";
+				call (uiNamespace getVariable "ramet_ingame_fnc_endWithDiag");
 			};
 		},
 		missionConfigFile,
@@ -124,4 +155,4 @@ uiNamespace setVariable ["ramet_ingame_fnc_startMission", {
 private _zero = findDisplay 0;
 { if (_x != _zero) then { _x closeDisplay 1; }; } forEach allDisplays;
 
-failMission "END1";
+call (uiNamespace getVariable "ramet_ingame_fnc_endWithDiag");

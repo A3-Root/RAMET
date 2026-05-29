@@ -1,4 +1,3 @@
-using System.IO.Compression;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using SixLabors.ImageSharp;
@@ -101,18 +100,6 @@ namespace MapExportExtension
             }
             Directory.CreateDirectory(_dataPath);
             SetStatus(ExportStatus.Running);
-        }
-
-        private static string ZipOutputDir()
-        {
-            var overrideBase = Environment.GetEnvironmentVariable("RAMET_INGAME_OUTPUT_DIR");
-            if (!string.IsNullOrWhiteSpace(overrideBase))
-            {
-                return overrideBase;
-            }
-            var arma3Root = Path.GetDirectoryName(System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName)
-                ?? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-            return Path.Combine(arma3Root, "ramet_ingame_output");
         }
 
         public void Calibrate(double[] safeZone, double[] pA, double[] pB, int w, int h)
@@ -250,31 +237,8 @@ namespace MapExportExtension
 
         public void Pack()
         {
-            SetStatus(ExportStatus.Packing);
-            Task.Run(() =>
-            {
-                try
-                {
-                    var zipPath = Path.Combine(ZipOutputDir(), _map.MapName + ".zip");
-                    if (File.Exists(zipPath))
-                    {
-                        File.Delete(zipPath);
-                    }
-                    using var zip = ZipFile.Open(zipPath, ZipArchiveMode.Create);
-                    zip.CreateEntryFromFile(Path.Combine(_dataPath, "index.json"), "index.json");
-                    foreach (var img in _map.Images)
-                    {
-                        zip.CreateEntryFromFile(Path.Combine(_dataPath, img.FileName), img.FileName);
-                    }
-                    SetStatus(ExportStatus.Done);
-                }
-                catch (Exception ex)
-                {
-                    SetStatus(ExportStatus.Error, ex.Message);
-                    Extension.ErrorMessage($"Unable to generate archive: {ex.Message}");
-                }
-                Extension.Callback("Complete", _map.MapName);
-            });
+            SetStatus(ExportStatus.Done);
+            Extension.Callback("Complete", _map.MapName);
         }
 
         public void Dispose()

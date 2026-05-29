@@ -82,6 +82,4 @@ while {true} do {
 
 private _summary = "archangel" callExtension ["ramet.bulk.export_summary", ["ingame"]];
 [format ["bulk ingame export complete — %1", _summary]] call _log;
-endMission "END1";
-sleep 3;
-closeDialog 58;
+["END1", true, false, false] call BIS_fnc_endMission;

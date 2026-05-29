@@ -16,6 +16,15 @@
 #include "script_component.hpp"
 #include "script_macros.hpp"
 
+// Store debriefing auto-close function in uiNamespace so it survives mission transitions.
+// Called from RscDisplayDebriefing onLoad (config patch) when ramet_ingame_autoCloseDebriefing is true.
+uiNamespace setVariable ["ramet_ingame_fnc_closeDebriefing", {
+    params ["_display"];
+    diag_log format ["[RAMET ingame]: Auto-closing debriefing display (IDD=%1)", ctrlIDD _display];
+    _display closeDisplay 1;
+    uiNamespace setVariable ["ramet_ingame_autoCloseDebriefing", false];
+}];
+
 // Mark addon as not ready
 ADDON = false;
 

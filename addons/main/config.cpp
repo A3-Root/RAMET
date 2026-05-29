@@ -42,6 +42,10 @@ class ctrlButtonCancel;
 #include "controls\mapItem.hpp"
 #include "dialogs\ingame_main.hpp"
 
+class RscDisplayDebriefing {
+    onLoad = "if (uiNamespace getVariable ['ramet_ingame_autoCloseDebriefing', false]) then { [_this select 0] call (uiNamespace getVariable 'ramet_ingame_fnc_closeDebriefing'); };";
+};
+
 class CfgFunctions {
     class root_amet {
         class ingame_ui {
