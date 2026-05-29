@@ -6,6 +6,14 @@ rem
 rem Runs entirely in Docker — no host install of tippecanoe / pmtiles / cwebp / etc.
 rem   * ocap-rt render :  uses the upstream `ocap_renderterrain_process.bat` (its own Docker image)
 rem   * RAMET orchestrate : uses the `ramet-postprocess` image built from tools/Dockerfile
+rem
+rem Flags:
+rem   --skip-ocap    Skip the ocap-rt Docker render (use when tiles already rendered)
+
+set "SKIP_OCAP=0"
+for %%A in (%*) do (
+    if /I "%%A"=="--skip-ocap" set "SKIP_OCAP=1"
+)
 
 set "SCRIPT_DIR=%~dp0"
 pushd "%SCRIPT_DIR%.." >nul
@@ -49,10 +57,12 @@ if defined RENDER_WORLDS (
     echo [render_worlds.txt] Empty or missing — rendering all worlds.
 )
 
-if defined OCAP_BAT (
+if "%SKIP_OCAP%"=="1" (
+    echo [SKIP] ocap-rt render skipped - --skip-ocap passed.
+) else if defined OCAP_BAT (
     echo === ocap-rt Docker render ===
     call "%OCAP_BAT%" "%RENDER_WORLDS%"
-    if errorlevel 1 echo [WARN] Docker render exited with errors — continuing.
+    if errorlevel 1 echo [WARN] Docker render exited with errors - continuing.
 )
 
 rem -------- 2) RAMET orchestrate image (build once, reuse forever) --------
@@ -64,12 +74,21 @@ if errorlevel 1 (
 )
 
 rem -------- 3) Run orchestrate inside the image, mounting Arma 3 root --------
+rem Build --world args from RENDER_WORLDS (comma-separated); fall back to --all.
+set "ORCHESTRATE_WORLDS=--all"
+if defined RENDER_WORLDS (
+    set "ORCHESTRATE_WORLDS="
+    for %%W in (%RENDER_WORLDS:,= %) do (
+        set "ORCHESTRATE_WORLDS=!ORCHESTRATE_WORLDS! --world %%W"
+    )
+)
+
 echo === orchestrate (merge + pmtiles + slice + optimize + verify) ===
 docker run --rm ^
     -v "%ARMA_ROOT%":/work ^
     -e RAMET_ARMA_ROOT=/work ^
     -e PYTHONUNBUFFERED=1 ^
-    ramet-postprocess:latest --all
+    ramet-postprocess:latest %ORCHESTRATE_WORLDS%
 if errorlevel 1 (
     echo [ERR] orchestrate reported failures.
     popd & exit /b 1
