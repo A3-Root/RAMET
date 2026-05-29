@@ -121,10 +121,11 @@ def process_world(world: str,
                   ocap_raw_dir: Path | None,
                   ocap_rendered_dir: Path | None,
                   out_root: Path,
+                  ingame_dir: Path | None = None,
                   skip_pmtiles: bool = False,
                   skip_slice: bool = False,
                   skip_optimize: bool = False) -> dict:
-    if not any([grad_dir, ocap_raw_dir, ocap_rendered_dir]):
+    if not any([grad_dir, ocap_raw_dir, ocap_rendered_dir, ingame_dir]):
         return {"world": world, "ok": False, "reason": "no inputs"}
 
     map_json = merge_outputs.merge_world(world, grad_dir, ocap_raw_dir, ocap_rendered_dir, out_root)
@@ -216,13 +217,8 @@ def process_world(world: str,
                     print(f"[orchestrate] {world}: render_topo failed — {exc}")
                     stage_results["render_topo"] = {"ok": False, "reason": "error", "err": str(exc)}
 
-    # --- ingame pyramid from arma3_mapexporter_output ---
-    ingame_root = None
-    if grad_dir is not None:
-        arma_root = grad_dir.parent.parent  # <Arma3>/grad_meh/<world>/.. -> <Arma3>
-        candidate = arma_root / "arma3_mapexporter_output" / world
-        if candidate.is_dir():
-            ingame_root = candidate
+    # --- ingame pyramid from ramet_ingame_output ---
+    ingame_root = ingame_dir if (ingame_dir and ingame_dir.is_dir()) else None
     if ingame_root and world_size:
         try:
             import render_ingame  # type: ignore
@@ -348,19 +344,21 @@ def process_world(world: str,
     return {"world": world, "ok": not errs, "errors": errs, "notes": notes, "stages": stage_results}
 
 
-def _resolve_input_roots(from_reference: bool) -> tuple[Path, Path, Path, Path]:
-    """Returns (grad_root, ocap_raw_root, ocap_rendered_root, out_root)."""
+def _resolve_input_roots(from_reference: bool) -> tuple[Path, Path, Path, Path, Path]:
+    """Returns (grad_root, ocap_raw_root, ocap_rendered_root, ingame_root, out_root)."""
     if from_reference:
         ref = ROOT / "reference_files"
         return (ref / "grad_meh",
                 ref / "ocap_exporter",
                 ref / "ocap_renderterrain_output",
+                ref / "ramet_ingame_output",
                 ROOT / "output")
     # Pipeline mode: env override -> Arma 3 root inferred from cwd.
     arma_root = Path(os.environ.get("RAMET_ARMA_ROOT", os.getcwd()))
     return (arma_root / "grad_meh",
             arma_root / "ocap_exporter",
             arma_root / "ocap_renderterrain_output",
+            arma_root / "ramet_ingame_output",
             arma_root / "ramet_output")
 
 
@@ -384,9 +382,9 @@ def _check_pause(pause_file: Path) -> None:
 
 
 def _run_world(args_tuple: tuple) -> dict:
-    world, gd, oraw, orend, out_root, skip_pmtiles, skip_slice, skip_optimize = args_tuple
+    world, gd, oraw, orend, ingame, out_root, skip_pmtiles, skip_slice, skip_optimize = args_tuple
     try:
-        return process_world(world, gd, oraw, orend, out_root, skip_pmtiles, skip_slice, skip_optimize)
+        return process_world(world, gd, oraw, orend, out_root, ingame, skip_pmtiles, skip_slice, skip_optimize)
     except Exception as exc:
         return {"world": world, "ok": False, "errors": [str(exc)], "notes": []}
 
@@ -398,6 +396,8 @@ def main() -> int:
     ap.add_argument("--from-reference", action="store_true",
                     help="read inputs from reference_files/ and write to RAMET/output/")
     ap.add_argument("--output", help="override output root")
+    ap.add_argument("--ingame-only", action="store_true",
+                    help="process only ramet_ingame_output; skip grad_meh/ocap stages")
     ap.add_argument("--skip-pmtiles", action="store_true")
     ap.add_argument("--skip-slice", action="store_true")
     ap.add_argument("--skip-optimize", action="store_true")
@@ -405,26 +405,31 @@ def main() -> int:
                     help="parallel world workers (default 4; tune to available RAM)")
     args = ap.parse_args()
 
-    grad_root, ocap_raw_root, ocap_rendered_root, default_out = _resolve_input_roots(args.from_reference)
+    grad_root, ocap_raw_root, ocap_rendered_root, ingame_root, default_out = _resolve_input_roots(args.from_reference)
     out_root = Path(args.output) if args.output else default_out
     out_root.mkdir(parents=True, exist_ok=True)
 
+    skip_pmtiles = args.skip_pmtiles or args.ingame_only
+    skip_slice = args.skip_slice or args.ingame_only
+    skip_optimize = args.skip_optimize or args.ingame_only
+
     if args.all:
-        target = _collect_worlds((grad_root, ocap_raw_root, ocap_rendered_root))
+        target = _collect_worlds((grad_root, ocap_raw_root, ocap_rendered_root, ingame_root))
     else:
         target = args.world
 
     if not target:
         print("no worlds to process — supply --all or --world")
-        print(f"  looked in: {grad_root}, {ocap_raw_root}, {ocap_rendered_root}")
+        print(f"  looked in: {grad_root}, {ocap_raw_root}, {ocap_rendered_root}, {ingame_root}")
         return 2
 
     world_args = [
         (w,
-         grad_root / w if (grad_root / w).is_dir() else None,
-         ocap_raw_root / w if (ocap_raw_root / w).is_dir() else None,
-         ocap_rendered_root / w if (ocap_rendered_root / w).is_dir() else None,
-         out_root, args.skip_pmtiles, args.skip_slice, args.skip_optimize)
+         None if args.ingame_only else (grad_root / w if (grad_root / w).is_dir() else None),
+         None if args.ingame_only else (ocap_raw_root / w if (ocap_raw_root / w).is_dir() else None),
+         None if args.ingame_only else (ocap_rendered_root / w if (ocap_rendered_root / w).is_dir() else None),
+         ingame_root / w if (ingame_root / w).is_dir() else None,
+         out_root, skip_pmtiles, skip_slice, skip_optimize)
         for w in target
     ]
 
