@@ -128,7 +128,15 @@ def process_world(world: str,
     if not any([grad_dir, ocap_raw_dir, ocap_rendered_dir, ingame_dir]):
         return {"world": world, "ok": False, "reason": "no inputs"}
 
-    map_json = merge_outputs.merge_world(world, grad_dir, ocap_raw_dir, ocap_rendered_dir, out_root)
+    if not any([grad_dir, ocap_raw_dir, ocap_rendered_dir]):
+        # ingame-only: preserve existing map.json rather than rebuilding from scratch
+        existing = out_root / world / "map.json"
+        if not existing.exists():
+            return {"world": world, "ok": False, "reason": "no existing map.json — run full pipeline first"}
+        map_json = json.loads(existing.read_text(encoding="utf-8"))
+        (out_root / world / "tiles").mkdir(parents=True, exist_ok=True)
+    else:
+        map_json = merge_outputs.merge_world(world, grad_dir, ocap_raw_dir, ocap_rendered_dir, out_root)
 
     world_size = map_json.get("worldSize") or 0
     out_tiles = out_root / world / "tiles"
