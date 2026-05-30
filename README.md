@@ -39,6 +39,8 @@ All three mods (`@root_amet`, `@grad_meh`, `@ocap_renderterrain`) are loaded tog
 
 Inside Arma, both bulk-export missions use Archangel (`"archangel" callExtension ["ramet.bulk.next_world", []]` etc.) to share queue state with the Python `ramet/` module, so the run survives crashes and per-world branch swaps.
 
+Step 3 can be paused between worlds by creating `Arma3\ramet.pause` while `batch\03_postprocess.bat` is running. The Docker orchestrator checks for that sentinel before starting each next world and waits while it exists. Delete `Arma3\ramet.pause` to resume.
+
 ## Layout
 
 ```
