@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import argparse
 import datetime
+import io
 import json
 import os
 import sys
@@ -30,6 +31,30 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "tools"))
+
+
+class _Tee(io.TextIOBase):
+    """Write to two streams simultaneously (console + log file)."""
+
+    def __init__(self, primary, secondary):
+        self._primary = primary
+        self._secondary = secondary
+
+    def write(self, data: str) -> int:
+        self._primary.write(data)
+        try:
+            self._secondary.write(data)
+            self._secondary.flush()
+        except Exception:
+            pass
+        return len(data)
+
+    def flush(self) -> None:
+        self._primary.flush()
+        try:
+            self._secondary.flush()
+        except Exception:
+            pass
 
 import merge_outputs  # noqa: E402
 import optimize_tiles  # noqa: E402
@@ -395,7 +420,13 @@ def _check_pause(pause_file: Path) -> None:
 
 
 def _probe_sat_mem_gb(grad_dir) -> float:
-    """Read sat PNG header only (no pixel load) → estimate peak render_sat RSS in GB."""
+    """Read sat PNG header only (no pixel load) → estimate peak render_sat RSS in GB.
+
+    Peak occurs during _apply_baked_overlays: base + overlay image + alpha_composite
+    result are all alive simultaneously (3× out_px²×4 bytes).  The old formula used
+    2× (sat + dark) which underestimated by 50%, causing a second world to be
+    dispatched concurrently with a large one and triggering OOM.
+    """
     if grad_dir is None:
         return 0.5
     sat_path = Path(grad_dir) / "sat" / "sat_full.png"
@@ -409,9 +440,9 @@ def _probe_sat_mem_gb(grad_dir) -> float:
         while p < sw:
             p <<= 1
         out_px = p
-        resize_peak = sw * sh * 4 + out_px * out_px * 4
-        dark_peak = out_px * out_px * 4 * 2
-        return max(resize_peak, dark_peak) / (1024 ** 3)
+        resize_peak = sw * sh * 4 + out_px * out_px * 4  # src + resampled canvas
+        baked_peak = out_px * out_px * 4 * 3              # base + ovl + composite
+        return max(resize_peak, baked_peak) / (1024 ** 3)
     except Exception:
         return 8.0
 
@@ -449,6 +480,18 @@ def main() -> int:
     out_root = Path(args.output) if args.output else default_out
     out_root.mkdir(parents=True, exist_ok=True)
 
+    # Set up log file: all stdout (including child-process prints) tee'd to file.
+    # RAMET_LOG_FILE env var is inherited by forked worker processes so ramet_log.log()
+    # also writes there from within each world's subprocess.
+    log_path = out_root / "ramet_postprocess.log"
+    os.environ["RAMET_LOG_FILE"] = str(log_path)
+    _log_fh = open(log_path, "a", encoding="utf-8", buffering=1)
+    sys.stdout = _Tee(sys.__stdout__, _log_fh)  # type: ignore[assignment]
+    _log_fh.write(
+        f"\n=== ramet-postprocess run started {datetime.datetime.now(datetime.timezone.utc).isoformat()} ===\n"
+        f"    workers={args.workers}  mem-limit={args.mem_limit_gb}GB  log={log_path}\n"
+    )
+
     skip_pmtiles = args.skip_pmtiles or args.ingame_only
     skip_slice = args.skip_slice or args.ingame_only
     skip_optimize = args.skip_optimize or args.ingame_only
@@ -476,17 +519,27 @@ def main() -> int:
     # Pause sentinel: create <Arma3>/ramet.pause on the host to pause between worlds.
     pause_file = out_root.parent / "ramet.pause"
 
+    import ramet_log
+
+    def _ts() -> str:
+        return time.strftime("%H:%M:%S")
+
     results = []
     if args.workers == 1 or len(world_args) == 1:
         for wa in world_args:
             _check_pause(pause_file)
+            print(f"[{_ts()}] [DISPATCH] {wa[0]} (sequential)", flush=True)
+            t0 = time.monotonic()
             res = _run_world(wa)
+            elapsed = time.monotonic() - t0
             results.append(res)
+            print(f"[{_ts()}] [DONE] {wa[0]} ok={res.get('ok')} elapsed={elapsed:.0f}s", flush=True)
             print(json.dumps(res, indent=2))
     else:
         queue = list(world_args)
         pending: dict = {}
-        world_mem: dict = {}  # fut -> estimated GB
+        world_mem: dict = {}   # fut -> estimated GB
+        world_t0: dict = {}    # fut -> start time
 
         with ProcessPoolExecutor(max_workers=args.workers) as pool:
             def _fill():
@@ -496,21 +549,38 @@ def main() -> int:
                     est = _probe_sat_mem_gb(gd)
                     active = sum(world_mem.values())
                     if active + est > args.mem_limit_gb and pending:
+                        print(
+                            f"[{_ts()}] [WAIT] {next_wa[0]} est={est:.1f}GB"
+                            f" active={active:.1f}GB limit={args.mem_limit_gb}GB"
+                            f" — holding until a world finishes",
+                            flush=True,
+                        )
                         break  # wait for an active world to finish before dispatching
                     _check_pause(pause_file)
                     wa = queue.pop(0)
                     fut = pool.submit(_run_world, wa)
                     pending[fut] = wa[0]
                     world_mem[fut] = est
+                    world_t0[fut] = time.monotonic()
+                    print(
+                        f"[{_ts()}] [DISPATCH] {wa[0]} est={est:.1f}GB"
+                        f" active={active + est:.1f}GB remaining_queue={len(queue)}",
+                        flush=True,
+                    )
 
             _fill()
             while pending:
                 done, _ = fut_wait(pending.keys(), return_when=FIRST_COMPLETED)
                 for fut in done:
                     world_mem.pop(fut, None)
-                    pending.pop(fut)
+                    elapsed = time.monotonic() - world_t0.pop(fut, time.monotonic())
+                    world_name = pending.pop(fut)
                     res = fut.result()
                     results.append(res)
+                    print(
+                        f"[{_ts()}] [DONE] {world_name} ok={res.get('ok')} elapsed={elapsed:.0f}s",
+                        flush=True,
+                    )
                     print(json.dumps(res, indent=2), flush=True)
                 _fill()
 

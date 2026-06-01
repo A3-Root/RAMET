@@ -15,6 +15,7 @@ from __future__ import annotations
 import gc
 import gzip
 import json
+import time
 from pathlib import Path
 
 import numpy as np
@@ -28,6 +29,7 @@ from raster_transform import (
     output_pixel_size,
     resample_source,
 )
+import ramet_log
 
 # Disable PIL decompression-bomb guard: sat exports from grad_meh are trusted.
 Image.MAX_IMAGE_PIXELS = None
@@ -256,45 +258,59 @@ def render(sat_full: Path, geojson_dir: Path, out_tiles: Path, world_size: float
 
     Raises SatSourceMissingError / SatSourceCorruptError on bad input — caller decides
     whether to swallow (and mark world partial) or re-raise.
+
+    Operation order is chosen to minimise peak RSS:
+      sat tile → baked_sat (del sat) → dark → sat_dark tile → baked_sat_dark
+    During each _apply_baked_overlays call the live images are:
+      base + ovl + alpha_composite result  (3× out_px²×4 bytes)
+    Generating baked_sat before dark avoids having dark alive simultaneously,
+    cutting peak from 4× to 3× (e.g. 68 GB → 51 GB for a 65536-px world).
     """
     validate_sat_source(sat_full)
 
-    print(f"[render_sat] loading {sat_full.name} ({sat_full.stat().st_size // 1024 // 1024} MB)")
+    t0 = time.monotonic()
+    ramet_log.log(f"[render_sat] loading {sat_full.name} ({sat_full.stat().st_size // 1024 // 1024} MB)")
     sat_raw = Image.open(sat_full).convert("RGBA")
-    print(f"[render_sat] image {sat_raw.width}×{sat_raw.height}")
+    ramet_log.log(f"[render_sat] image {sat_raw.width}×{sat_raw.height}")
 
     wm = WorldMeta(world_size_m=float(world_size), src_extent_m=float(world_size))
     out_px = output_pixel_size(wm, source_width_px=sat_raw.width)
     if (sat_raw.width, sat_raw.height) != (out_px, out_px):
-        print(f"[render_sat] resampling source -> authoritative {out_px}x{out_px}")
+        ramet_log.log(f"[render_sat] resampling source -> authoritative {out_px}x{out_px}")
         sat = resample_source(sat_raw, wm, out_px, resample=Image.BILINEAR)
         del sat_raw
+        gc.collect()
     else:
         sat = sat_raw
 
     results: list[LayerResult] = []
 
-    print("[render_sat] tiling sat")
+    # Step 1: tile sat (only sat alive)
+    ramet_log.log("[render_sat] tiling sat")
     write_pyramid(sat, out_tiles / "sat", fmt="webp")
     results.append(_emit("sat", out_tiles / "sat"))
 
-    print("[render_sat] generating sat_dark")
-    dark = _make_dark(sat)
-    write_pyramid(dark, out_tiles / "sat_dark", fmt="webp")
-    results.append(_emit("sat_dark", out_tiles / "sat_dark"))
-
     if geojson_dir.is_dir():
-        print("[render_sat] generating baked_sat")
+        # Step 2: baked_sat — peak: sat + ovl + composite (3×)
+        ramet_log.log("[render_sat] generating baked_sat")
         baked = _apply_baked_overlays(sat, geojson_dir, world_size, _STYLE_LIGHT)
-        # Release sat now — baked_sat_dark only needs dark, not sat.
-        del sat
-        gc.collect()
         write_pyramid(baked, out_tiles / "baked_sat", fmt="webp")
         results.append(_emit("baked_sat", out_tiles / "baked_sat"))
         del baked
         gc.collect()
 
-        print("[render_sat] generating baked_sat_dark")
+        # Step 3: dark — peak: sat + dark (2×); sat released after
+        ramet_log.log("[render_sat] generating sat_dark")
+        dark = _make_dark(sat)
+        del sat
+        gc.collect()
+
+        # Step 4: tile sat_dark (only dark alive)
+        write_pyramid(dark, out_tiles / "sat_dark", fmt="webp")
+        results.append(_emit("sat_dark", out_tiles / "sat_dark"))
+
+        # Step 5: baked_sat_dark — peak: dark + ovl + composite (3×)
+        ramet_log.log("[render_sat] generating baked_sat_dark")
         baked_dark = _apply_baked_overlays(dark, geojson_dir, world_size, _STYLE_DARK)
         del dark
         gc.collect()
@@ -303,8 +319,15 @@ def render(sat_full: Path, geojson_dir: Path, out_tiles: Path, world_size: float
         del baked_dark
         gc.collect()
     else:
-        print(f"[render_sat] no geojson dir at {geojson_dir}, skipping baked variants")
-        del sat, dark
+        ramet_log.log(f"[render_sat] no geojson dir at {geojson_dir}, skipping baked variants")
+        ramet_log.log("[render_sat] generating sat_dark")
+        dark = _make_dark(sat)
+        del sat
+        gc.collect()
+        write_pyramid(dark, out_tiles / "sat_dark", fmt="webp")
+        results.append(_emit("sat_dark", out_tiles / "sat_dark"))
+        del dark
         gc.collect()
 
+    ramet_log.log(f"[render_sat] done in {time.monotonic() - t0:.1f}s")
     return results
