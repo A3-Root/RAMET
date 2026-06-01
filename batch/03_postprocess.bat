@@ -88,7 +88,7 @@ docker run --rm ^
     -v "%ARMA_ROOT%":/work ^
     -e RAMET_ARMA_ROOT=/work ^
     -e PYTHONUNBUFFERED=1 ^
-    ramet-postprocess:latest %ORCHESTRATE_WORLDS%
+    ramet-postprocess:latest %ORCHESTRATE_WORLDS% --workers 2 --optimize-workers 4
 if errorlevel 1 (
     echo [ERR] orchestrate reported failures.
     popd & exit /b 1

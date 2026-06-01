@@ -13,6 +13,7 @@ Writes:
 Color logic replicates C++ buildTopoPixels + topoColor from topoimages.cpp.
 """
 from __future__ import annotations
+import gc
 import gzip
 import json
 from pathlib import Path
@@ -229,7 +230,8 @@ def _apply_overlays(
     world_size: float,
     style: dict,
 ) -> Image.Image:
-    result = base.convert("RGBA")
+    # base is always RGBA here; skip the copy.
+    result = base
     order = ["rivers", "buildings", "roads", "powerlines"]
     sources = {
         "rivers":     [geojson_dir / "river.geojson.gz"],
@@ -321,14 +323,20 @@ def render(
 
     print("[render_topo] generating baked_topo")
     baked = _apply_overlays(topo_img, geojson_dir, world_size, _STYLE_LIGHT)
+    del topo_img
+    gc.collect()
     write_pyramid(baked, out_tiles / "baked_topo")
     results.append(_emit("baked_topo", out_tiles / "baked_topo"))
     del baked
+    gc.collect()
 
     print("[render_topo] generating baked_topo_dark")
     baked_dark = _apply_overlays(topo_dark_img, geojson_dir, world_size, _STYLE_DARK)
+    del topo_dark_img
+    gc.collect()
     write_pyramid(baked_dark, out_tiles / "baked_topo_dark")
     results.append(_emit("baked_topo_dark", out_tiles / "baked_topo_dark"))
     del baked_dark
+    gc.collect()
 
     return results

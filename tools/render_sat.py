@@ -12,6 +12,7 @@ Writes:
   out_tiles_dir/baked_sat_dark/
 """
 from __future__ import annotations
+import gc
 import gzip
 import json
 from pathlib import Path
@@ -174,7 +175,9 @@ def _apply_baked_overlays(
     world_size: float,
     style: dict,
 ) -> Image.Image:
-    result = base.convert("RGBA")
+    # base is always RGBA here; skip the copy — alpha_composite returns a new
+    # image on each call so the caller's reference to base is not mutated.
+    result = base
 
     # Rivers first (background feature)
     fill, fa, out, oa = style["rivers"]
@@ -209,16 +212,32 @@ def _apply_baked_overlays(
     return result
 
 
+_DARK_STRIP_ROWS = 256
+
+
 def _make_dark(sat: Image.Image) -> Image.Image:
-    """Replicate C++ makeDarkSatellitePixels: luminance-based dark tint."""
-    arr = np.asarray(sat.convert("RGBA"), dtype=np.float32)
-    lum = arr[..., 0] * 0.2126 + arr[..., 1] * 0.7152 + arr[..., 2] * 0.0722
-    out = np.empty_like(arr)
-    out[..., 0] = np.clip(lum * 0.18 + 18.0, 0, 255)
-    out[..., 1] = np.clip(lum * 0.20 + 22.0, 0, 255)
-    out[..., 2] = np.clip(lum * 0.24 + 28.0, 0, 255)
-    out[..., 3] = 255
-    return Image.fromarray(out.astype(np.uint8), "RGBA")
+    """Replicate C++ makeDarkSatellitePixels: luminance-based dark tint.
+
+    Processes in horizontal strips to avoid allocating a full float32 copy of
+    the entire image (which would be 4× the raw RGBA size — e.g. 16 GB for a
+    32768-px sat).  Each strip is ~256 rows × width × 4ch × 4 bytes ≈ 128 MB
+    at most, keeping peak overhead well under 1 GB regardless of world size.
+    """
+    w, h = sat.size
+    out_img = Image.new("RGBA", (w, h))
+    for y0 in range(0, h, _DARK_STRIP_ROWS):
+        y1 = min(y0 + _DARK_STRIP_ROWS, h)
+        strip = sat.crop((0, y0, w, y1))
+        arr = np.asarray(strip, dtype=np.float32)  # strip is already RGBA
+        lum = arr[..., 0] * 0.2126 + arr[..., 1] * 0.7152 + arr[..., 2] * 0.0722
+        out = np.empty((y1 - y0, w, 4), dtype=np.uint8)
+        out[..., 0] = np.clip(lum * 0.18 + 18.0, 0, 255)
+        out[..., 1] = np.clip(lum * 0.20 + 22.0, 0, 255)
+        out[..., 2] = np.clip(lum * 0.24 + 28.0, 0, 255)
+        out[..., 3] = 255
+        out_img.paste(Image.fromarray(out, "RGBA"), (0, y0))
+        del strip, arr, lum, out
+    return out_img
 
 
 def _emit(layer_id: str, target: Path, ext: str = "webp") -> LayerResult:
@@ -267,17 +286,25 @@ def render(sat_full: Path, geojson_dir: Path, out_tiles: Path, world_size: float
     if geojson_dir.is_dir():
         print("[render_sat] generating baked_sat")
         baked = _apply_baked_overlays(sat, geojson_dir, world_size, _STYLE_LIGHT)
+        # Release sat now — baked_sat_dark only needs dark, not sat.
+        del sat
+        gc.collect()
         write_pyramid(baked, out_tiles / "baked_sat", fmt="webp")
         results.append(_emit("baked_sat", out_tiles / "baked_sat"))
         del baked
+        gc.collect()
 
         print("[render_sat] generating baked_sat_dark")
         baked_dark = _apply_baked_overlays(dark, geojson_dir, world_size, _STYLE_DARK)
+        del dark
+        gc.collect()
         write_pyramid(baked_dark, out_tiles / "baked_sat_dark", fmt="webp")
         results.append(_emit("baked_sat_dark", out_tiles / "baked_sat_dark"))
         del baked_dark
+        gc.collect()
     else:
         print(f"[render_sat] no geojson dir at {geojson_dir}, skipping baked variants")
+        del sat, dark
+        gc.collect()
 
-    del dark
     return results

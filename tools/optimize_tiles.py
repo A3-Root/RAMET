@@ -19,7 +19,7 @@ from pathlib import Path
 WEBP_VARIANTS = {"sat", "sat_dark", "baked_sat", "baked_sat_dark"}
 PNG_VARIANTS = {"topo", "topo_dark", "topoRelief", "colorRelief", "baked_topo", "baked_topo_dark"}
 
-_WORKERS = os.cpu_count() or 4
+_WORKERS = min(os.cpu_count() or 4, 4)
 
 
 def _have(cmd: str) -> bool:
@@ -56,7 +56,7 @@ def _to_png(png: Path, have_pngquant: bool, have_oxipng: bool) -> str:
     return "png"
 
 
-def optimize(world_dir: Path) -> dict:
+def optimize(world_dir: Path, max_workers: int | None = None) -> dict:
     tiles_dir = world_dir / "tiles"
     counts = {"webp": 0, "png": 0, "skipped": 0, "errors": 0}
     if not tiles_dir.is_dir():
@@ -66,8 +66,9 @@ def optimize(world_dir: Path) -> dict:
     have_pngquant = _have("pngquant")
     have_oxipng   = _have("oxipng")
 
+    workers = max_workers if max_workers is not None else _WORKERS
     futures = {}
-    with ThreadPoolExecutor(max_workers=_WORKERS) as pool:
+    with ThreadPoolExecutor(max_workers=workers) as pool:
         for variant_dir in tiles_dir.iterdir():
             if not variant_dir.is_dir():
                 continue

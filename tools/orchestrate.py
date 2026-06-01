@@ -124,7 +124,8 @@ def process_world(world: str,
                   ingame_dir: Path | None = None,
                   skip_pmtiles: bool = False,
                   skip_slice: bool = False,
-                  skip_optimize: bool = False) -> dict:
+                  skip_optimize: bool = False,
+                  optimize_workers: int | None = None) -> dict:
     if not any([grad_dir, ocap_raw_dir, ocap_rendered_dir, ingame_dir]):
         return {"world": world, "ok": False, "reason": "no inputs"}
 
@@ -291,7 +292,7 @@ def process_world(world: str,
 
     # raster optimization
     if not skip_optimize:
-        counts = optimize_tiles.optimize(out_root / world)
+        counts = optimize_tiles.optimize(out_root / world, max_workers=optimize_workers)
         print(f"[orchestrate] {world}: optimize counts={counts}")
         for layer in map_json.get("rasterLayers", []):
             variant = layer["id"]
@@ -394,9 +395,10 @@ def _check_pause(pause_file: Path) -> None:
 
 
 def _run_world(args_tuple: tuple) -> dict:
-    world, gd, oraw, orend, ingame, out_root, skip_pmtiles, skip_slice, skip_optimize = args_tuple
+    world, gd, oraw, orend, ingame, out_root, skip_pmtiles, skip_slice, skip_optimize, opt_workers = args_tuple
     try:
-        return process_world(world, gd, oraw, orend, out_root, ingame, skip_pmtiles, skip_slice, skip_optimize)
+        return process_world(world, gd, oraw, orend, out_root, ingame,
+                             skip_pmtiles, skip_slice, skip_optimize, opt_workers)
     except Exception as exc:
         return {"world": world, "ok": False, "errors": [str(exc)], "notes": []}
 
@@ -413,8 +415,10 @@ def main() -> int:
     ap.add_argument("--skip-pmtiles", action="store_true")
     ap.add_argument("--skip-slice", action="store_true")
     ap.add_argument("--skip-optimize", action="store_true")
-    ap.add_argument("--workers", type=int, default=3,
-                    help="parallel world workers (default 2; peak ~12 GB RAM per worker — do not exceed floor(RAM_GB/12))")
+    ap.add_argument("--workers", type=int, default=2,
+                    help="parallel world workers (default 2; peak ~16 GB RAM per worker — do not exceed floor(RAM_GB/16))")
+    ap.add_argument("--optimize-workers", type=int, default=4,
+                    help="tile-optimize subprocess threads per world (default 4)")
     args = ap.parse_args()
 
     grad_root, ocap_raw_root, ocap_rendered_root, ingame_root, default_out = _resolve_input_roots(args.from_reference)
@@ -441,7 +445,7 @@ def main() -> int:
          None if args.ingame_only else (ocap_raw_root / w if (ocap_raw_root / w).is_dir() else None),
          None if args.ingame_only else (ocap_rendered_root / w if (ocap_rendered_root / w).is_dir() else None),
          ingame_root / w if (ingame_root / w).is_dir() else None,
-         out_root, skip_pmtiles, skip_slice, skip_optimize)
+         out_root, skip_pmtiles, skip_slice, skip_optimize, args.optimize_workers)
         for w in target
     ]
 
