@@ -394,6 +394,28 @@ def _check_pause(pause_file: Path) -> None:
         print("[orchestrate] RESUMED", flush=True)
 
 
+def _probe_sat_mem_gb(grad_dir) -> float:
+    """Read sat PNG header only (no pixel load) → estimate peak render_sat RSS in GB."""
+    if grad_dir is None:
+        return 0.5
+    sat_path = Path(grad_dir) / "sat" / "sat_full.png"
+    if not sat_path.exists():
+        return 0.5
+    try:
+        from PIL import Image
+        with Image.open(sat_path) as im:
+            sw, sh = im.size
+        p = 256
+        while p < sw:
+            p <<= 1
+        out_px = p
+        resize_peak = sw * sh * 4 + out_px * out_px * 4
+        dark_peak = out_px * out_px * 4 * 2
+        return max(resize_peak, dark_peak) / (1024 ** 3)
+    except Exception:
+        return 8.0
+
+
 def _run_world(args_tuple: tuple) -> dict:
     world, gd, oraw, orend, ingame, out_root, skip_pmtiles, skip_slice, skip_optimize, opt_workers = args_tuple
     try:
@@ -419,6 +441,8 @@ def main() -> int:
                     help="parallel world workers (default 2; peak ~16 GB RAM per worker — do not exceed floor(RAM_GB/16))")
     ap.add_argument("--optimize-workers", type=int, default=4,
                     help="tile-optimize subprocess threads per world (default 4)")
+    ap.add_argument("--mem-limit-gb", type=float, default=40.0,
+                    help="memory budget for concurrent worlds in GB (default 40; sized for 48 GB Docker)")
     args = ap.parse_args()
 
     grad_root, ocap_raw_root, ocap_rendered_root, ingame_root, default_out = _resolve_input_roots(args.from_reference)
@@ -462,20 +486,28 @@ def main() -> int:
     else:
         queue = list(world_args)
         pending: dict = {}
+        world_mem: dict = {}  # fut -> estimated GB
 
         with ProcessPoolExecutor(max_workers=args.workers) as pool:
-            # Fill pool to capacity respecting pause.
             def _fill():
                 while queue and len(pending) < args.workers:
+                    next_wa = queue[0]
+                    gd = next_wa[1]  # grad_dir is index 1 in the tuple
+                    est = _probe_sat_mem_gb(gd)
+                    active = sum(world_mem.values())
+                    if active + est > args.mem_limit_gb and pending:
+                        break  # wait for an active world to finish before dispatching
                     _check_pause(pause_file)
                     wa = queue.pop(0)
                     fut = pool.submit(_run_world, wa)
                     pending[fut] = wa[0]
+                    world_mem[fut] = est
 
             _fill()
             while pending:
                 done, _ = fut_wait(pending.keys(), return_when=FIRST_COMPLETED)
                 for fut in done:
+                    world_mem.pop(fut, None)
                     pending.pop(fut)
                     res = fut.result()
                     results.append(res)

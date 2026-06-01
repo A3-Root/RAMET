@@ -86,7 +86,7 @@ def resample_source(
     scaled_w = max(1, int(round(out_px * (src_extent / world_meta.world_size_m))))
     scaled_h = scaled_w
 
-    src_rgba = src_img.convert("RGBA")
+    src_rgba = src_img if src_img.mode == "RGBA" else src_img.convert("RGBA")
     if src_rgba.size != (scaled_w, scaled_h):
         src_rgba = src_rgba.resize((scaled_w, scaled_h), resample)
 
