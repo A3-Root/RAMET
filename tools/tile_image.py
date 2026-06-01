@@ -1,5 +1,6 @@
 """Tile a PIL Image into a {z}/{x}/{y} pyramid matching grad_meh's writeImagePyramid."""
 from __future__ import annotations
+import gc
 import math
 import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -56,21 +57,33 @@ def write_pyramid(
     Tile writes within each zoom level are parallelised via ThreadPoolExecutor.
     """
     out_dir.mkdir(parents=True, exist_ok=True)
-    img = img.convert("RGBA")
+    # NB: convert("RGBA") on an already-RGBA image returns a *full copy* (= a
+    # second 17 GB allocation for a 65536² world). Only convert when needed.
+    if img.mode != "RGBA":
+        img = img.convert("RGBA")
 
-    levels: list[Image.Image] = []
-    level_img = img
-    while level_img.width >= tile_size or level_img.height >= tile_size or not levels:
-        levels.append(level_img)
-        nw = max(1, level_img.width // 2)
-        nh = max(1, level_img.height // 2)
-        if nw == level_img.width and nh == level_img.height:
+    # Pre-compute the level sizes (full-res first) without materialising the
+    # images, so we can generate + tile + free one level at a time. This keeps
+    # at most two adjacent levels alive (full + its half) instead of the whole
+    # pyramid (~1.33× the full image) resident simultaneously.
+    sizes: list[tuple[int, int]] = []
+    lw, lh = img.size
+    first = True
+    while lw >= tile_size or lh >= tile_size or first:
+        first = False
+        sizes.append((lw, lh))
+        nw = max(1, lw // 2)
+        nh = max(1, lh // 2)
+        if nw == lw and nh == lh:
             break
-        level_img = level_img.resize((nw, nh), Image.LANCZOS)
+        lw, lh = nw, nh
+
+    n_levels = len(sizes)
+    cur = img  # full resolution = highest z (= n_levels - 1)
 
     with ThreadPoolExecutor(max_workers=_WORKERS) as pool:
-        for z, img_at_level in enumerate(reversed(levels)):
-            lw, lh = img_at_level.size
+        for i, (lw, lh) in enumerate(sizes):
+            z = n_levels - 1 - i
             cols = math.ceil(lw / tile_size)
             rows = math.ceil(lh / tile_size)
 
@@ -83,7 +96,19 @@ def write_pyramid(
                 x_dir.mkdir(exist_ok=True)
                 for y in range(rows):
                     futures.append(
-                        pool.submit(_write_tile, img_at_level, x, y, lw, lh, x_dir, tile_size, fmt)
+                        pool.submit(_write_tile, cur, x, y, lw, lh, x_dir, tile_size, fmt)
                     )
             for f in as_completed(futures):
                 f.result()
+
+            # Downsample to the next (smaller) level, then free this one.
+            if i + 1 < n_levels:
+                nxt = cur.resize(sizes[i + 1], Image.LANCZOS)
+                if cur is not img:
+                    cur.close()
+                del cur
+                gc.collect()
+                cur = nxt
+
+    if cur is not img:
+        cur.close()

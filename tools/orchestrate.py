@@ -25,8 +25,10 @@ import io
 import json
 import os
 import sys
+import threading
 import time
 from concurrent.futures import ProcessPoolExecutor, FIRST_COMPLETED, wait as fut_wait
+from concurrent.futures.process import BrokenProcessPool
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -422,10 +424,15 @@ def _check_pause(pause_file: Path) -> None:
 def _probe_sat_mem_gb(grad_dir) -> float:
     """Read sat PNG header only (no pixel load) → estimate peak render_sat RSS in GB.
 
-    Peak occurs during _apply_baked_overlays: base + overlay image + alpha_composite
-    result are all alive simultaneously (3× out_px²×4 bytes).  The old formula used
-    2× (sat + dark) which underestimated by 50%, causing a second world to be
-    dispatched concurrently with a large one and triggering OOM.
+    render_sat keeps at most two full RGBA images live simultaneously (sat + dark,
+    2× out_px²×4 bytes); overlays are now baked in horizontal strips so they add
+    only a few small strips, not another full image. The transient resample step
+    holds source + resampled canvas. Peak = max(resample, 2× authoritative).
+
+    IMPORTANT: PIL's decompression-bomb guard must be disabled before Image.open —
+    a 51200² sat is ~2.6 Gpx, far over the 89 Mpx default, so without this the
+    open raises DecompressionBombError, we fall through to the fallback, and the
+    dispatcher under-counts memory (the original OOM bug: est=8.0 for big worlds).
     """
     if grad_dir is None:
         return 0.5
@@ -434,6 +441,7 @@ def _probe_sat_mem_gb(grad_dir) -> float:
         return 0.5
     try:
         from PIL import Image
+        Image.MAX_IMAGE_PIXELS = None  # sat exports are trusted; see docstring
         with Image.open(sat_path) as im:
             sw, sh = im.size
         p = 256
@@ -441,10 +449,22 @@ def _probe_sat_mem_gb(grad_dir) -> float:
             p <<= 1
         out_px = p
         resize_peak = sw * sh * 4 + out_px * out_px * 4  # src + resampled canvas
-        baked_peak = out_px * out_px * 4 * 3              # base + ovl + composite
+        baked_peak = out_px * out_px * 4 * 2             # sat + dark live together
         return max(resize_peak, baked_peak) / (1024 ** 3)
-    except Exception:
-        return 8.0
+    except Exception as exc:
+        # Don't silently return a flat constant — that masked the OOM. Estimate
+        # from the on-disk PNG size (sat PNGs compress ~5-8×; assume 6×, RGBA 4ch)
+        # and log loudly so the fallback is visible in the post-mortem log.
+        try:
+            import ramet_log
+            nbytes = sat_path.stat().st_size
+            est = (nbytes * 6 * 4 / 3) * 2 / (1024 ** 3)  # rough 2× decoded RGBA
+            est = max(8.0, est)
+            ramet_log.log(f"[probe] WARN sat header read failed for {sat_path} "
+                          f"({exc}); size-derived est={est:.1f}GB")
+            return est
+        except Exception:
+            return 16.0
 
 
 def _run_world(args_tuple: tuple) -> dict:
@@ -468,8 +488,9 @@ def main() -> int:
     ap.add_argument("--skip-pmtiles", action="store_true")
     ap.add_argument("--skip-slice", action="store_true")
     ap.add_argument("--skip-optimize", action="store_true")
-    ap.add_argument("--workers", type=int, default=2,
-                    help="parallel world workers (default 2; peak ~16 GB RAM per worker — do not exceed floor(RAM_GB/16))")
+    ap.add_argument("--workers", type=int, default=1,
+                    help="parallel world workers (default 1; a single big world peaks ~40 GB. "
+                         "With >1, the mem-limit guard self-throttles big worlds — do not exceed floor(RAM_GB/40) for big maps)")
     ap.add_argument("--optimize-workers", type=int, default=4,
                     help="tile-optimize subprocess threads per world (default 4)")
     ap.add_argument("--mem-limit-gb", type=float, default=40.0,
@@ -525,64 +546,136 @@ def main() -> int:
         return time.strftime("%H:%M:%S")
 
     results = []
-    if args.workers == 1 or len(world_args) == 1:
-        for wa in world_args:
+    queue = list(world_args)
+    pending: dict = {}     # fut -> world name
+    world_mem: dict = {}   # fut -> estimated GB
+    world_t0: dict = {}    # fut -> start time
+
+    # Every world runs in its OWN subprocess (max_tasks_per_child=1) so memory is
+    # fully reclaimed between worlds AND an OOM kill surfaces as BrokenProcessPool
+    # we can catch — instead of taking down the orchestrator. This applies even
+    # at --workers 1 (the default).
+    def _new_pool():
+        try:
+            return ProcessPoolExecutor(max_workers=args.workers, max_tasks_per_child=1)
+        except TypeError:  # Python < 3.11
+            return ProcessPoolExecutor(max_workers=args.workers)
+
+    pool = _new_pool()
+
+    # Background memory sampler — writes container + per-worker RSS to the log
+    # every 10 s so an OOM event has a diagnosable timeline. Best-effort/daemon.
+    _stop_sampler = threading.Event()
+
+    def _sampler() -> None:
+        while not _stop_sampler.wait(10.0):
+            try:
+                used, lim = ramet_log.cgroup_mem_mb()
+                kids = []
+                for pid in list(getattr(pool, "_processes", {}) or {}):
+                    rss = ramet_log.proc_rss_mb(pid)
+                    if rss:
+                        kids.append(f"{pid}={rss}MB")
+                active = ",".join(pending.values()) or "-"
+                ramet_log.log(
+                    f"[mem] container_used={used}MB limit={lim or 'inf'}MB "
+                    f"active=[{active}] workers=[{' '.join(kids)}]"
+                )
+            except Exception:
+                pass
+
+    threading.Thread(target=_sampler, daemon=True).start()
+
+    def _fill():
+        while queue and len(pending) < args.workers:
+            next_wa = queue[0]
+            gd = next_wa[1]  # grad_dir is index 1 in the tuple
+            est = _probe_sat_mem_gb(gd)
+            active = sum(world_mem.values())
+            if active + est > args.mem_limit_gb and pending:
+                print(
+                    f"[{_ts()}] [WAIT] {next_wa[0]} est={est:.1f}GB"
+                    f" active={active:.1f}GB limit={args.mem_limit_gb}GB"
+                    f" — holding until a world finishes",
+                    flush=True,
+                )
+                break  # wait for an active world to finish before dispatching
             _check_pause(pause_file)
-            print(f"[{_ts()}] [DISPATCH] {wa[0]} (sequential)", flush=True)
-            t0 = time.monotonic()
-            res = _run_world(wa)
-            elapsed = time.monotonic() - t0
+            wa = queue.pop(0)
+            fut = pool.submit(_run_world, wa)
+            pending[fut] = wa[0]
+            world_mem[fut] = est
+            world_t0[fut] = time.monotonic()
+            print(
+                f"[{_ts()}] [DISPATCH] {wa[0]} est={est:.1f}GB"
+                f" active={active + est:.1f}GB remaining_queue={len(queue)}",
+                flush=True,
+            )
+
+    def _fail_all_pending(reason: str) -> None:
+        """OOM/crash broke the pool — every in-flight world is a casualty.
+        Mark them failed (don't requeue → guaranteed forward progress)."""
+        for fut, wname in list(pending.items()):
+            world_mem.pop(fut, None)
+            world_t0.pop(fut, None)
+            res = {"world": wname, "ok": False, "errors": [reason], "notes": []}
             results.append(res)
-            print(f"[{_ts()}] [DONE] {wa[0]} ok={res.get('ok')} elapsed={elapsed:.0f}s", flush=True)
-            print(json.dumps(res, indent=2))
-    else:
-        queue = list(world_args)
-        pending: dict = {}
-        world_mem: dict = {}   # fut -> estimated GB
-        world_t0: dict = {}    # fut -> start time
+            print(f"[{_ts()}] [WORKER-KILLED] {wname} — {reason}", flush=True)
+            print(json.dumps(res, indent=2), flush=True)
+        pending.clear()
 
-        with ProcessPoolExecutor(max_workers=args.workers) as pool:
-            def _fill():
-                while queue and len(pending) < args.workers:
-                    next_wa = queue[0]
-                    gd = next_wa[1]  # grad_dir is index 1 in the tuple
-                    est = _probe_sat_mem_gb(gd)
-                    active = sum(world_mem.values())
-                    if active + est > args.mem_limit_gb and pending:
-                        print(
-                            f"[{_ts()}] [WAIT] {next_wa[0]} est={est:.1f}GB"
-                            f" active={active:.1f}GB limit={args.mem_limit_gb}GB"
-                            f" — holding until a world finishes",
-                            flush=True,
-                        )
-                        break  # wait for an active world to finish before dispatching
-                    _check_pause(pause_file)
-                    wa = queue.pop(0)
-                    fut = pool.submit(_run_world, wa)
-                    pending[fut] = wa[0]
-                    world_mem[fut] = est
-                    world_t0[fut] = time.monotonic()
-                    print(
-                        f"[{_ts()}] [DISPATCH] {wa[0]} est={est:.1f}GB"
-                        f" active={active + est:.1f}GB remaining_queue={len(queue)}",
-                        flush=True,
-                    )
-
-            _fill()
-            while pending:
+    try:
+        _fill()
+        while pending:
+            try:
                 done, _ = fut_wait(pending.keys(), return_when=FIRST_COMPLETED)
+                broke = False
                 for fut in done:
                     world_mem.pop(fut, None)
                     elapsed = time.monotonic() - world_t0.pop(fut, time.monotonic())
                     world_name = pending.pop(fut)
-                    res = fut.result()
+                    try:
+                        res = fut.result()
+                    except BrokenProcessPool:
+                        # Put it back so _fail_all_pending records it uniformly.
+                        pending[fut] = world_name
+                        broke = True
+                        break
+                    except Exception as exc:
+                        res = {"world": world_name, "ok": False,
+                               "errors": [str(exc)], "notes": []}
+                    else:
+                        results.append(res)
+                        print(
+                            f"[{_ts()}] [DONE] {world_name} ok={res.get('ok')}"
+                            f" elapsed={elapsed:.0f}s",
+                            flush=True,
+                        )
+                        print(json.dumps(res, indent=2), flush=True)
+                        continue
+                    # non-broken exception path
                     results.append(res)
                     print(
-                        f"[{_ts()}] [DONE] {world_name} ok={res.get('ok')} elapsed={elapsed:.0f}s",
+                        f"[{_ts()}] [DONE] {world_name} ok=False elapsed={elapsed:.0f}s",
                         flush=True,
                     )
                     print(json.dumps(res, indent=2), flush=True)
-                _fill()
+                if broke:
+                    raise BrokenProcessPool()
+            except BrokenProcessPool:
+                _fail_all_pending("worker killed — likely OOM (BrokenProcessPool)")
+                try:
+                    pool.shutdown(wait=False, cancel_futures=True)
+                except Exception:
+                    pass
+                pool = _new_pool()  # noqa: PLW2901 — rebind for subsequent submits
+            _fill()
+    finally:
+        _stop_sampler.set()
+        try:
+            pool.shutdown(wait=True, cancel_futures=True)
+        except Exception:
+            pass
 
     failed = [r for r in results if not r.get("ok")]
     return 1 if failed else 0

@@ -96,10 +96,14 @@ def _load_gz(path: Path) -> list[dict]:
     return []
 
 
-def _w2px(coord: list[float], world_size: float, img_w: int, img_h: int) -> tuple[int, int]:
+def _w2px(
+    coord: list[float], world_size: float, img_w: int, img_h: int, y_offset: int = 0
+) -> tuple[int, int]:
+    # img_w/img_h are the FULL image dims (world->pixel mapping). y_offset shifts
+    # the result into strip-local coordinates when baking in horizontal strips.
     return (
         int(coord[0] / world_size * img_w),
-        int(img_h - coord[1] / world_size * img_h),
+        int(img_h - coord[1] / world_size * img_h) - y_offset,
     )
 
 
@@ -112,6 +116,7 @@ def _draw_features(
     fill_rgba: tuple,
     outline_rgba: tuple | None,
     line_width: int,
+    y_offset: int = 0,
 ) -> None:
     for feat in features:
         geom = feat.get("geometry") or {}
@@ -120,17 +125,17 @@ def _draw_features(
         if not coords:
             continue
         if gtype == "LineString":
-            pts = [_w2px(c, world_size, img_w, img_h) for c in coords]
+            pts = [_w2px(c, world_size, img_w, img_h, y_offset) for c in coords]
             if len(pts) >= 2:
                 draw.line(pts, fill=fill_rgba, width=line_width)
         elif gtype == "MultiLineString":
             for seg in coords:
-                pts = [_w2px(c, world_size, img_w, img_h) for c in seg]
+                pts = [_w2px(c, world_size, img_w, img_h, y_offset) for c in seg]
                 if len(pts) >= 2:
                     draw.line(pts, fill=fill_rgba, width=line_width)
         elif gtype == "Polygon":
             for ring in coords:
-                pts = [_w2px(c, world_size, img_w, img_h) for c in ring]
+                pts = [_w2px(c, world_size, img_w, img_h, y_offset) for c in ring]
                 if len(pts) >= 3:
                     draw.polygon(pts, fill=fill_rgba)
                     if outline_rgba:
@@ -138,80 +143,84 @@ def _draw_features(
         elif gtype == "MultiPolygon":
             for poly in coords:
                 for ring in poly:
-                    pts = [_w2px(c, world_size, img_w, img_h) for c in ring]
+                    pts = [_w2px(c, world_size, img_w, img_h, y_offset) for c in ring]
                     if len(pts) >= 3:
                         draw.polygon(pts, fill=fill_rgba)
                         if outline_rgba:
                             draw.line(pts + [pts[0]], fill=outline_rgba, width=1)
 
 
-def _composite_layer(
-    base: Image.Image,
-    features: list[dict],
-    world_size: float,
-    fill_rgb: tuple,
-    fill_alpha: float,
-    outline_rgb: tuple | None,
-    outline_alpha: float,
-    line_width: int = 2,
-) -> Image.Image:
-    if not features:
-        return base
-    w, h = base.size
-    ovl = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(ovl)
-    fa = int(fill_alpha * 255)
-    oa = int(outline_alpha * 255)
-    _draw_features(
-        draw, features, world_size, w, h,
-        fill_rgb + (fa,),
-        (outline_rgb + (oa,)) if outline_rgb else None,
-        line_width,
-    )
-    return Image.alpha_composite(base, ovl)
+# Horizontal strip height (rows) used when baking overlays in place. A full-size
+# overlay layer for a 65536² world would be another 17 GB RGBA image; baking in
+# strips keeps the transient overhead to ~3 strips (≈3 GB at 4096 rows) on top of
+# the base image, instead of the old 4× peak (base + overlay + alpha_composite
+# result, all full-size, while the caller still held the original).
+_BAKE_STRIP_ROWS = 4096
 
 
-def _apply_baked_overlays(
+def _overlay_layers(geojson_dir: Path, style: dict) -> list[tuple]:
+    """Build the ordered draw list: (features, fill_rgba, outline_rgba, line_width).
+
+    Order matches the historical baking order: rivers, buildings, roads, powerlines.
+    Empty layers are dropped.
+    """
+    layers: list[tuple] = []
+
+    def _rgba(rgb: tuple, alpha: float) -> tuple:
+        return rgb + (int(alpha * 255),)
+
+    fill, fa, out, oa = style["rivers"]
+    layers.append((_load_gz(geojson_dir / "river.geojson.gz"),
+                   _rgba(fill, fa), _rgba(out, oa) if out else None, 2))
+
+    fill, fa, out, oa = style["buildings"]
+    layers.append((_load_gz(geojson_dir / "house.geojson.gz"),
+                   _rgba(fill, fa), _rgba(out, oa) if out else None, 2))
+
+    fill, fa, out, oa = style["roads"]
+    roads_dir = geojson_dir / "roads"
+    if roads_dir.is_dir():
+        for road_file in sorted(roads_dir.glob("*.geojson.gz")):
+            layers.append((_load_gz(road_file), _rgba(fill, fa), None, 2))
+
+    fill, fa, out, oa = style["powerlines"]
+    layers.append((_load_gz(geojson_dir / "powerline.geojson.gz"),
+                   _rgba(fill, fa), None, 1))
+
+    return [lyr for lyr in layers if lyr[0]]
+
+
+def _bake_overlays_inplace(
     base: Image.Image,
     geojson_dir: Path,
     world_size: float,
     style: dict,
 ) -> Image.Image:
-    # base is always RGBA here; skip the copy — alpha_composite returns a new
-    # image on each call so the caller's reference to base is not mutated.
-    result = base
+    """Composite all vector overlays onto `base` IN PLACE, processing horizontal
+    strips so peak memory stays at base + ~3 small strips rather than 4× full.
 
-    # Rivers first (background feature)
-    fill, fa, out, oa = style["rivers"]
-    result = _composite_layer(
-        result, _load_gz(geojson_dir / "river.geojson.gz"),
-        world_size, fill, fa, out, oa,
-    )
-
-    # Buildings
-    fill, fa, out, oa = style["buildings"]
-    result = _composite_layer(
-        result, _load_gz(geojson_dir / "house.geojson.gz"),
-        world_size, fill, fa, out, oa,
-    )
-
-    # Roads (all types)
-    fill, fa, out, oa = style["roads"]
-    roads_dir = geojson_dir / "roads"
-    if roads_dir.is_dir():
-        for road_file in sorted(roads_dir.glob("*.geojson.gz")):
-            result = _composite_layer(
-                result, _load_gz(road_file), world_size, fill, fa, None, 0.0,
-            )
-
-    # Powerlines
-    fill, fa, out, oa = style["powerlines"]
-    result = _composite_layer(
-        result, _load_gz(geojson_dir / "powerline.geojson.gz"),
-        world_size, fill, fa, None, 0.0, line_width=1,
-    )
-
-    return result
+    `base` (RGBA) is mutated and also returned for convenience. Features are
+    re-iterated per strip; PIL clips off-strip geometry (drawn at negative /
+    out-of-range y via the strip y_offset), so the result is identical to a
+    single full-image composite.
+    """
+    layers = _overlay_layers(geojson_dir, style)
+    if not layers:
+        return base
+    w, h = base.size
+    for y0 in range(0, h, _BAKE_STRIP_ROWS):
+        y1 = min(y0 + _BAKE_STRIP_ROWS, h)
+        ovl = Image.new("RGBA", (w, y1 - y0), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(ovl)
+        for features, fill_rgba, outline_rgba, lw in layers:
+            _draw_features(draw, features, world_size, w, h,
+                           fill_rgba, outline_rgba, lw, y_offset=y0)
+        strip = base.crop((0, y0, w, y1))
+        merged = Image.alpha_composite(strip, ovl)
+        base.paste(merged, (0, y0))
+        del ovl, draw, strip, merged
+    gc.collect()
+    return base
 
 
 _DARK_STRIP_ROWS = 256
@@ -260,11 +269,13 @@ def render(sat_full: Path, geojson_dir: Path, out_tiles: Path, world_size: float
     whether to swallow (and mark world partial) or re-raise.
 
     Operation order is chosen to minimise peak RSS:
-      sat tile → baked_sat (del sat) → dark → sat_dark tile → baked_sat_dark
-    During each _apply_baked_overlays call the live images are:
-      base + ovl + alpha_composite result  (3× out_px²×4 bytes)
-    Generating baked_sat before dark avoids having dark alive simultaneously,
-    cutting peak from 4× to 3× (e.g. 68 GB → 51 GB for a 65536-px world).
+      tile sat → dark = make_dark(sat) → tile sat_dark
+        → bake light overlays INTO sat (in place) → tile baked_sat → free sat
+        → bake dark overlays INTO dark (in place) → tile baked_sat_dark → free dark
+    Overlays are baked in place strip-by-strip (_bake_overlays_inplace), so the
+    only large images ever simultaneously live are sat + dark (2× out_px²×4),
+    plus a few small overlay strips. For a 65536-px world that is ~34 GB + minor
+    overhead, comfortably under a 48 GB budget (was ~64 GB with the old 4× path).
     """
     validate_sat_source(sat_full)
 
@@ -285,38 +296,34 @@ def render(sat_full: Path, geojson_dir: Path, out_tiles: Path, world_size: float
 
     results: list[LayerResult] = []
 
-    # Step 1: tile sat (only sat alive)
+    # Step 1: tile plain sat (only sat alive)
     ramet_log.log("[render_sat] tiling sat")
     write_pyramid(sat, out_tiles / "sat", fmt="webp")
     results.append(_emit("sat", out_tiles / "sat"))
 
     if geojson_dir.is_dir():
-        # Step 2: baked_sat — peak: sat + ovl + composite (3×)
-        ramet_log.log("[render_sat] generating baked_sat")
-        baked = _apply_baked_overlays(sat, geojson_dir, world_size, _STYLE_LIGHT)
-        write_pyramid(baked, out_tiles / "baked_sat", fmt="webp")
-        results.append(_emit("baked_sat", out_tiles / "baked_sat"))
-        del baked
-        gc.collect()
-
-        # Step 3: dark — peak: sat + dark (2×); sat released after
+        # Step 2: derive dark from pristine sat (strip-based → +1× full)
         ramet_log.log("[render_sat] generating sat_dark")
-        dark = _make_dark(sat)
-        del sat
-        gc.collect()
+        dark = _make_dark(sat)            # sat + dark live (2×)
 
-        # Step 4: tile sat_dark (only dark alive)
+        # Step 3: tile plain sat_dark
         write_pyramid(dark, out_tiles / "sat_dark", fmt="webp")
         results.append(_emit("sat_dark", out_tiles / "sat_dark"))
 
-        # Step 5: baked_sat_dark — peak: dark + ovl + composite (3×)
-        ramet_log.log("[render_sat] generating baked_sat_dark")
-        baked_dark = _apply_baked_overlays(dark, geojson_dir, world_size, _STYLE_DARK)
-        del dark
+        # Step 4: bake light overlays INTO sat in place → baked_sat
+        ramet_log.log("[render_sat] generating baked_sat")
+        _bake_overlays_inplace(sat, geojson_dir, world_size, _STYLE_LIGHT)
+        write_pyramid(sat, out_tiles / "baked_sat", fmt="webp")
+        results.append(_emit("baked_sat", out_tiles / "baked_sat"))
+        del sat
         gc.collect()
-        write_pyramid(baked_dark, out_tiles / "baked_sat_dark", fmt="webp")
+
+        # Step 5: bake dark overlays INTO dark in place → baked_sat_dark
+        ramet_log.log("[render_sat] generating baked_sat_dark")
+        _bake_overlays_inplace(dark, geojson_dir, world_size, _STYLE_DARK)
+        write_pyramid(dark, out_tiles / "baked_sat_dark", fmt="webp")
         results.append(_emit("baked_sat_dark", out_tiles / "baked_sat_dark"))
-        del baked_dark
+        del dark
         gc.collect()
     else:
         ramet_log.log(f"[render_sat] no geojson dir at {geojson_dir}, skipping baked variants")
@@ -329,5 +336,7 @@ def render(sat_full: Path, geojson_dir: Path, out_tiles: Path, world_size: float
         del dark
         gc.collect()
 
-    ramet_log.log(f"[render_sat] done in {time.monotonic() - t0:.1f}s")
+    ramet_log.log(
+        f"[render_sat] done in {time.monotonic() - t0:.1f}s peak={ramet_log.peak_mb()}MB"
+    )
     return results

@@ -163,33 +163,30 @@ def _load_gz(path: Path) -> list[dict]:
     return []
 
 
-def _w2px(coord: list[float], world_size: float, img_w: int, img_h: int) -> tuple[int, int]:
+# Horizontal strip height (rows) for in-place overlay baking — see render_sat.
+_BAKE_STRIP_ROWS = 4096
+
+
+def _w2px(
+    coord: list[float], world_size: float, img_w: int, img_h: int, y_offset: int = 0
+) -> tuple[int, int]:
     return (
         int(coord[0] / world_size * img_w),
-        int(img_h - coord[1] / world_size * img_h),
+        int(img_h - coord[1] / world_size * img_h) - y_offset,
     )
 
 
-def _composite_layer(
-    base: Image.Image,
+def _draw_features(
+    draw: ImageDraw.Draw,
     features: list[dict],
     world_size: float,
-    fill_rgb: tuple,
-    fill_alpha: float,
-    outline_rgb: tuple | None,
-    outline_alpha: float,
-    line_width: int = 2,
-) -> Image.Image:
-    if not features:
-        return base
-    w, h = base.size
-    ovl = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(ovl)
-    fa = int(fill_alpha * 255)
-    oa = int(outline_alpha * 255)
-    fill_rgba = fill_rgb + (fa,)
-    out_rgba = (outline_rgb + (oa,)) if outline_rgb else None
-
+    img_w: int,
+    img_h: int,
+    fill_rgba: tuple,
+    out_rgba: tuple | None,
+    line_width: int,
+    y_offset: int = 0,
+) -> None:
     for feat in features:
         geom = feat.get("geometry") or {}
         gtype = geom.get("type", "")
@@ -197,17 +194,17 @@ def _composite_layer(
         if not coords:
             continue
         if gtype == "LineString":
-            pts = [_w2px(c, world_size, w, h) for c in coords]
+            pts = [_w2px(c, world_size, img_w, img_h, y_offset) for c in coords]
             if len(pts) >= 2:
                 draw.line(pts, fill=fill_rgba, width=line_width)
         elif gtype == "MultiLineString":
             for seg in coords:
-                pts = [_w2px(c, world_size, w, h) for c in seg]
+                pts = [_w2px(c, world_size, img_w, img_h, y_offset) for c in seg]
                 if len(pts) >= 2:
                     draw.line(pts, fill=fill_rgba, width=line_width)
         elif gtype == "Polygon":
             for ring in coords:
-                pts = [_w2px(c, world_size, w, h) for c in ring]
+                pts = [_w2px(c, world_size, img_w, img_h, y_offset) for c in ring]
                 if len(pts) >= 3:
                     draw.polygon(pts, fill=fill_rgba)
                     if out_rgba:
@@ -215,23 +212,15 @@ def _composite_layer(
         elif gtype == "MultiPolygon":
             for poly in coords:
                 for ring in poly:
-                    pts = [_w2px(c, world_size, w, h) for c in ring]
+                    pts = [_w2px(c, world_size, img_w, img_h, y_offset) for c in ring]
                     if len(pts) >= 3:
                         draw.polygon(pts, fill=fill_rgba)
                         if out_rgba:
                             draw.line(pts + [pts[0]], fill=out_rgba, width=1)
 
-    return Image.alpha_composite(base, ovl)
 
-
-def _apply_overlays(
-    base: Image.Image,
-    geojson_dir: Path,
-    world_size: float,
-    style: dict,
-) -> Image.Image:
-    # base is always RGBA here; skip the copy.
-    result = base
+def _overlay_layers(geojson_dir: Path, style: dict) -> list[tuple]:
+    """Ordered draw list (features, fill_rgba, outline_rgba, line_width); empties dropped."""
     order = ["rivers", "buildings", "roads", "powerlines"]
     sources = {
         "rivers":     [geojson_dir / "river.geojson.gz"],
@@ -240,13 +229,44 @@ def _apply_overlays(
                       if (geojson_dir / "roads").is_dir() else [],
         "powerlines": [geojson_dir / "powerline.geojson.gz"],
     }
+    layers: list[tuple] = []
     for key in order:
         fill, fa, out, oa = style[key]
         lw = 1 if key == "powerlines" else 2
+        fill_rgba = fill + (int(fa * 255),)
+        out_rgba = (out + (int(oa * 255),)) if out else None
         for path in sources[key]:
-            result = _composite_layer(result, _load_gz(path),
-                                      world_size, fill, fa, out, oa, lw)
-    return result
+            feats = _load_gz(path)
+            if feats:
+                layers.append((feats, fill_rgba, out_rgba, lw))
+    return layers
+
+
+def _bake_overlays_inplace(
+    base: Image.Image,
+    geojson_dir: Path,
+    world_size: float,
+    style: dict,
+) -> Image.Image:
+    """Composite overlays onto `base` IN PLACE in horizontal strips (peak = base +
+    a few small strips instead of 4× full). Mutates and returns `base`."""
+    layers = _overlay_layers(geojson_dir, style)
+    if not layers:
+        return base
+    w, h = base.size
+    for y0 in range(0, h, _BAKE_STRIP_ROWS):
+        y1 = min(y0 + _BAKE_STRIP_ROWS, h)
+        ovl = Image.new("RGBA", (w, y1 - y0), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(ovl)
+        for feats, fill_rgba, out_rgba, lw in layers:
+            _draw_features(draw, feats, world_size, w, h,
+                           fill_rgba, out_rgba, lw, y_offset=y0)
+        strip = base.crop((0, y0, w, y1))
+        merged = Image.alpha_composite(strip, ovl)
+        base.paste(merged, (0, y0))
+        del ovl, draw, strip, merged
+    gc.collect()
+    return base
 
 
 def _emit(layer_id: str, target: Path, ext: str = "png") -> LayerResult:
@@ -322,21 +342,17 @@ def render(
         topo_dark_img = topo_dark_img.resize((out_px, out_px), Image.LANCZOS)
 
     print("[render_topo] generating baked_topo")
-    baked = _apply_overlays(topo_img, geojson_dir, world_size, _STYLE_LIGHT)
-    del topo_img
-    gc.collect()
-    write_pyramid(baked, out_tiles / "baked_topo")
+    _bake_overlays_inplace(topo_img, geojson_dir, world_size, _STYLE_LIGHT)
+    write_pyramid(topo_img, out_tiles / "baked_topo")
     results.append(_emit("baked_topo", out_tiles / "baked_topo"))
-    del baked
+    del topo_img
     gc.collect()
 
     print("[render_topo] generating baked_topo_dark")
-    baked_dark = _apply_overlays(topo_dark_img, geojson_dir, world_size, _STYLE_DARK)
-    del topo_dark_img
-    gc.collect()
-    write_pyramid(baked_dark, out_tiles / "baked_topo_dark")
+    _bake_overlays_inplace(topo_dark_img, geojson_dir, world_size, _STYLE_DARK)
+    write_pyramid(topo_dark_img, out_tiles / "baked_topo_dark")
     results.append(_emit("baked_topo_dark", out_tiles / "baked_topo_dark"))
-    del baked_dark
+    del topo_dark_img
     gc.collect()
 
     return results
