@@ -1,6 +1,10 @@
 @echo off
 setlocal EnableExtensions
 
+@REM ====================================================
+@REM             THIS IS BROKEN - DO NOT USE             
+@REM ====================================================
+
 rem RAMET step 6 — in-game (GMS) bulk export.
 rem Requires: @arma3MapExporter, @CBA_A3, @root_amet, ARCHANGEL.
 rem Sets RAMET_INGAME_OUTPUT_DIR so the GMS C# extension writes into the Arma 3 root.

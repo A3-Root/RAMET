@@ -413,8 +413,8 @@ def main() -> int:
     ap.add_argument("--skip-pmtiles", action="store_true")
     ap.add_argument("--skip-slice", action="store_true")
     ap.add_argument("--skip-optimize", action="store_true")
-    ap.add_argument("--workers", type=int, default=4,
-                    help="parallel world workers (default 4; tune to available RAM)")
+    ap.add_argument("--workers", type=int, default=3,
+                    help="parallel world workers (default 2; peak ~12 GB RAM per worker — do not exceed floor(RAM_GB/12))")
     args = ap.parse_args()
 
     grad_root, ocap_raw_root, ocap_rendered_root, ingame_root, default_out = _resolve_input_roots(args.from_reference)
