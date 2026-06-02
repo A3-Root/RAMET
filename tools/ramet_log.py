@@ -21,6 +21,27 @@ def _mem_mb() -> int:
     return 0
 
 
+_libc = None
+
+
+def trim() -> None:
+    """Return freed heap memory to the OS (glibc malloc_trim). No-op off glibc.
+
+    Python's allocator and PIL/numpy hold onto large freed blocks, so RSS stays
+    near the high-water mark long after objects are gc'd. Calling this after
+    freeing big images keeps peak RSS close to *live* memory — essential for the
+    65536² worlds that otherwise accumulate dead buffers past the 48 GB budget.
+    """
+    global _libc
+    try:
+        import ctypes
+        if _libc is None:
+            _libc = ctypes.CDLL("libc.so.6")
+        _libc.malloc_trim(0)
+    except Exception:
+        pass
+
+
 def peak_mb() -> int:
     """Peak (high-water-mark) RSS in MB for this process via VmHWM (Linux only)."""
     try:

@@ -64,6 +64,43 @@ def world_to_pixel(x_m: float, y_m: float, world_meta: WorldMeta, out_px: int) -
     return (px, py)
 
 
+# Output rows per band when resizing very large rasters. A single PIL resize of
+# a 51200→65536 image holds source + a full-width horizontal-pass intermediate +
+# the output simultaneously (~40 GB for 65536²), which blows the 48 GB budget.
+# Resampling the output in horizontal bands — each via resize(box=...) so the
+# result is bit-identical to a one-shot resize — keeps peak at source + output
+# (~27 GB) with only a small per-band intermediate.
+_RESIZE_BAND_ROWS = 4096
+
+
+def _resize_banded(
+    src: Image.Image, dst_w: int, dst_h: int, resample: int
+) -> Image.Image:
+    """Memory-frugal equivalent of src.resize((dst_w, dst_h), resample).
+
+    Uses the `box` argument so each output band samples exactly its source
+    sub-region — identical output to a single resize, but without the full-size
+    intermediate buffer. Falls back to a plain resize for small images.
+    """
+    src_w, src_h = src.size
+    # Small enough that the transient intermediate is cheap — just do it directly.
+    if dst_w * dst_h <= 4096 * 4096:
+        return src.resize((dst_w, dst_h), resample)
+
+    out = Image.new("RGBA", (dst_w, dst_h))
+    for oy0 in range(0, dst_h, _RESIZE_BAND_ROWS):
+        oy1 = min(oy0 + _RESIZE_BAND_ROWS, dst_h)
+        # Exact source box (float coords) mapped from this output band.
+        top = oy0 * src_h / dst_h
+        bottom = oy1 * src_h / dst_h
+        band = src.resize(
+            (dst_w, oy1 - oy0), resample, box=(0.0, top, float(src_w), bottom)
+        )
+        out.paste(band, (0, oy0))
+        del band
+    return out
+
+
 def resample_source(
     src_img: Image.Image,
     world_meta: WorldMeta,
@@ -88,7 +125,7 @@ def resample_source(
 
     src_rgba = src_img if src_img.mode == "RGBA" else src_img.convert("RGBA")
     if src_rgba.size != (scaled_w, scaled_h):
-        src_rgba = src_rgba.resize((scaled_w, scaled_h), resample)
+        src_rgba = _resize_banded(src_rgba, scaled_w, scaled_h, resample)
 
     if (scaled_w, scaled_h) == (out_px, out_px):
         return src_rgba

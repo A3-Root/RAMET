@@ -7,6 +7,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from PIL import Image
 
+import ramet_log
+
 TILE_SIZE = 256
 _WORKERS = min(os.cpu_count() or 4, 16)
 
@@ -112,3 +114,5 @@ def write_pyramid(
 
     if cur is not img:
         cur.close()
+    gc.collect()
+    ramet_log.trim()  # return the freed downsample buffers to the OS

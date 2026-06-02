@@ -66,6 +66,15 @@ WORKDIR /app
 COPY tools/requirements.txt /app/tools/requirements.txt
 RUN pip install -r /app/tools/requirements.txt
 
+# Cap glibc per-thread malloc arenas and trim aggressively. render_sat/topo churn
+# many large transient PIL/numpy buffers (resize, alpha_composite); the default
+# per-CPU arenas retain freed blocks, inflating RSS high-water far above live
+# data. On a many-thread host this alone cuts measured peak markedly and keeps a
+# 65536² world's peak under the 48 GB Docker budget. (Placed late so it does not
+# invalidate the apt/pip build-cache layers above.)
+ENV MALLOC_ARENA_MAX=2 \
+    MALLOC_TRIM_THRESHOLD_=134217728
+
 # Tool code.
 COPY tools /app/tools
 

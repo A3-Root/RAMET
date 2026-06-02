@@ -28,6 +28,7 @@ from raster_transform import (
     count_tiles,
     output_pixel_size,
 )
+import ramet_log
 
 Image.MAX_IMAGE_PIXELS = None
 
@@ -302,57 +303,46 @@ def render(
     print(f"[render_topo] DEM {w}×{h}, cellsize={cellsize}m")
 
     results: list[LayerResult] = []
+    has_geo = geojson_dir.is_dir()
+    if not has_geo:
+        print(f"[render_topo] no geojson dir at {geojson_dir}, baked variants skipped")
 
-    plain_variants = [("topo", False), ("topo_dark", True)]
-    topo_img: Image.Image | None = None
-    topo_dark_img: Image.Image | None = None
-
-    for variant_id, is_dark in plain_variants:
-        target = out_tiles / variant_id
-        if target.exists():
-            print(f"[render_topo] {variant_id} already present, skipping (ocap wins)")
-            continue
-        print(f"[render_topo] generating {variant_id}")
-        img = _build_topo(elevation, cellsize, dark=is_dark)
-        write_pyramid(img, target)
-        results.append(_emit(variant_id, target))
-        if variant_id == "topo":
-            topo_img = img
-        else:
-            topo_dark_img = img
-
-    if not geojson_dir.is_dir():
-        print(f"[render_topo] no geojson dir at {geojson_dir}, skipping baked variants")
-        return results
-
-    if topo_img is None:
-        print("[render_topo] generating topo base for baked overlay")
-        topo_img = _build_topo(elevation, cellsize, dark=False)
-    if topo_dark_img is None:
-        print("[render_topo] generating topo_dark base for baked overlay")
-        topo_dark_img = _build_topo(elevation, cellsize, dark=True)
-
-    # Resize DEM-rendered base to the authoritative pyramid size derived from worldSize.
+    # Authoritative pyramid size (square) from worldSize / DEM width. Computed up
+    # front so each variant can be processed and freed independently — topo and
+    # topo_dark are NEVER both held as full out_px images (1× peak, not 2×).
     wm = WorldMeta(world_size_m=float(world_size), src_extent_m=float(world_size))
-    out_px = output_pixel_size(wm, source_width_px=max(topo_img.width, int(world_size)))
-    if topo_img.width != out_px:
-        print(f"[render_topo] upscaling topo base {topo_img.width}px -> {out_px}px")
-        topo_img = topo_img.resize((out_px, out_px), Image.LANCZOS)
-    if topo_dark_img.width != out_px:
-        topo_dark_img = topo_dark_img.resize((out_px, out_px), Image.LANCZOS)
+    out_px = output_pixel_size(wm, source_width_px=max(w, int(world_size)))
 
-    print("[render_topo] generating baked_topo")
-    _bake_overlays_inplace(topo_img, geojson_dir, world_size, _STYLE_LIGHT)
-    write_pyramid(topo_img, out_tiles / "baked_topo")
-    results.append(_emit("baked_topo", out_tiles / "baked_topo"))
-    del topo_img
-    gc.collect()
+    variants = [("topo", False, _STYLE_LIGHT), ("topo_dark", True, _STYLE_DARK)]
+    for variant_id, is_dark, style in variants:
+        plain_target = out_tiles / variant_id
+        need_plain = not plain_target.exists()  # ocap wins if already present
+        need_baked = has_geo
+        if not need_plain and not need_baked:
+            print(f"[render_topo] {variant_id} present, baked skipped — nothing to do")
+            continue
 
-    print("[render_topo] generating baked_topo_dark")
-    _bake_overlays_inplace(topo_dark_img, geojson_dir, world_size, _STYLE_DARK)
-    write_pyramid(topo_dark_img, out_tiles / "baked_topo_dark")
-    results.append(_emit("baked_topo_dark", out_tiles / "baked_topo_dark"))
-    del topo_dark_img
-    gc.collect()
+        base = _build_topo(elevation, cellsize, dark=is_dark)
+
+        if need_plain:
+            print(f"[render_topo] generating {variant_id}")
+            write_pyramid(base, plain_target)
+            results.append(_emit(variant_id, plain_target))
+        else:
+            print(f"[render_topo] {variant_id} present, skipping plain (ocap wins)")
+
+        if need_baked:
+            if base.width != out_px:
+                print(f"[render_topo] upscaling {variant_id} base {base.width}px -> {out_px}px")
+                base = base.resize((out_px, out_px), Image.LANCZOS)
+            baked_id = f"baked_{variant_id}"
+            print(f"[render_topo] generating {baked_id}")
+            _bake_overlays_inplace(base, geojson_dir, world_size, style)
+            write_pyramid(base, out_tiles / baked_id)
+            results.append(_emit(baked_id, out_tiles / baked_id))
+
+        del base
+        gc.collect()
+        ramet_log.trim()
 
     return results

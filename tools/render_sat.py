@@ -15,6 +15,8 @@ from __future__ import annotations
 import gc
 import gzip
 import json
+import os
+import tempfile
 import time
 from pathlib import Path
 
@@ -226,29 +228,61 @@ def _bake_overlays_inplace(
 _DARK_STRIP_ROWS = 256
 
 
-def _make_dark(sat: Image.Image) -> Image.Image:
-    """Replicate C++ makeDarkSatellitePixels: luminance-based dark tint.
+def _dark_strip(arr: np.ndarray) -> np.ndarray:
+    """Luminance-based dark tint for one RGBA strip (C++ makeDarkSatellitePixels)."""
+    a = arr.astype(np.float32)
+    lum = a[..., 0] * 0.2126 + a[..., 1] * 0.7152 + a[..., 2] * 0.0722
+    out = np.empty(arr.shape, dtype=np.uint8)
+    out[..., 0] = np.clip(lum * 0.18 + 18.0, 0, 255)
+    out[..., 1] = np.clip(lum * 0.20 + 22.0, 0, 255)
+    out[..., 2] = np.clip(lum * 0.24 + 28.0, 0, 255)
+    out[..., 3] = 255
+    return out
 
-    Processes in horizontal strips to avoid allocating a full float32 copy of
-    the entire image (which would be 4× the raw RGBA size — e.g. 16 GB for a
-    32768-px sat).  Each strip is ~256 rows × width × 4ch × 4 bytes ≈ 128 MB
-    at most, keeping peak overhead well under 1 GB regardless of world size.
+
+def _make_dark(sat: Image.Image) -> Image.Image:
+    """Dark-tinted copy of `sat` as a full in-RAM image (strip-processed).
+
+    Peak: sat + result both live (2×). Prefer _make_dark_to_memmap for large
+    worlds where 2× would exceed the memory budget.
     """
     w, h = sat.size
     out_img = Image.new("RGBA", (w, h))
     for y0 in range(0, h, _DARK_STRIP_ROWS):
         y1 = min(y0 + _DARK_STRIP_ROWS, h)
-        strip = sat.crop((0, y0, w, y1))
-        arr = np.asarray(strip, dtype=np.float32)  # strip is already RGBA
-        lum = arr[..., 0] * 0.2126 + arr[..., 1] * 0.7152 + arr[..., 2] * 0.0722
-        out = np.empty((y1 - y0, w, 4), dtype=np.uint8)
-        out[..., 0] = np.clip(lum * 0.18 + 18.0, 0, 255)
-        out[..., 1] = np.clip(lum * 0.20 + 22.0, 0, 255)
-        out[..., 2] = np.clip(lum * 0.24 + 28.0, 0, 255)
-        out[..., 3] = 255
-        out_img.paste(Image.fromarray(out, "RGBA"), (0, y0))
-        del strip, arr, lum, out
+        strip = np.asarray(sat.crop((0, y0, w, y1)))
+        out_img.paste(Image.fromarray(_dark_strip(strip), "RGBA"), (0, y0))
+        del strip
     return out_img
+
+
+def _make_dark_to_memmap(sat: Image.Image, path: Path) -> tuple[int, int]:
+    """Write the dark variant of `sat` straight to an on-disk RGBA memmap, never
+    materialising a second full image. Returns (w, h) for later reload.
+
+    This keeps peak at ~1× the sat image (sat + one strip + OS-paged memmap)
+    instead of 2×, which is what lets a 65536² world stay under the 48 GB budget.
+    """
+    w, h = sat.size
+    darr = np.memmap(path, dtype=np.uint8, mode="w+", shape=(h, w, 4))
+    try:
+        for y0 in range(0, h, _DARK_STRIP_ROWS):
+            y1 = min(y0 + _DARK_STRIP_ROWS, h)
+            strip = np.asarray(sat.crop((0, y0, w, y1)))
+            darr[y0:y1] = _dark_strip(strip)
+            del strip
+        darr.flush()
+    finally:
+        del darr
+    return w, h
+
+
+def _load_dark_from_memmap(path: Path, w: int, h: int) -> Image.Image:
+    """Reload a memmap written by _make_dark_to_memmap into a writable PIL image."""
+    darr = np.memmap(path, dtype=np.uint8, mode="r", shape=(h, w, 4))
+    img = Image.fromarray(np.array(darr), "RGBA")  # np.array → owns its buffer
+    del darr
+    return img
 
 
 def _emit(layer_id: str, target: Path, ext: str = "webp") -> LayerResult:
@@ -268,14 +302,12 @@ def render(sat_full: Path, geojson_dir: Path, out_tiles: Path, world_size: float
     Raises SatSourceMissingError / SatSourceCorruptError on bad input — caller decides
     whether to swallow (and mark world partial) or re-raise.
 
-    Operation order is chosen to minimise peak RSS:
-      tile sat → dark = make_dark(sat) → tile sat_dark
-        → bake light overlays INTO sat (in place) → tile baked_sat → free sat
-        → bake dark overlays INTO dark (in place) → tile baked_sat_dark → free dark
-    Overlays are baked in place strip-by-strip (_bake_overlays_inplace), so the
-    only large images ever simultaneously live are sat + dark (2× out_px²×4),
-    plus a few small overlay strips. For a 65536-px world that is ~34 GB + minor
-    overhead, comfortably under a 48 GB budget (was ~64 GB with the old 4× path).
+    Memory strategy (critical for 65536² worlds at 16 GB / full RGBA image):
+    sat and dark are NEVER both held as full images. The dark variant is spilled
+    to an on-disk memmap straight from the pristine sat (one strip live at a
+    time), sat is baked in place + tiled + freed, then dark is reloaded for its
+    own variants. Combined with malloc_trim after each free, peak stays ~1× the
+    full image (≈26 GB at 65536) instead of the 2× (~40 GB+) that OOM'd at 48 GB.
     """
     validate_sat_source(sat_full)
 
@@ -291,50 +323,71 @@ def render(sat_full: Path, geojson_dir: Path, out_tiles: Path, world_size: float
         sat = resample_source(sat_raw, wm, out_px, resample=Image.BILINEAR)
         del sat_raw
         gc.collect()
+        ramet_log.trim()
     else:
         sat = sat_raw
 
     results: list[LayerResult] = []
+    out_tiles.mkdir(parents=True, exist_ok=True)
 
     # Step 1: tile plain sat (only sat alive)
     ramet_log.log("[render_sat] tiling sat")
     write_pyramid(sat, out_tiles / "sat", fmt="webp")
     results.append(_emit("sat", out_tiles / "sat"))
+    ramet_log.trim()
 
-    if geojson_dir.is_dir():
-        # Step 2: derive dark from pristine sat (strip-based → +1× full)
-        ramet_log.log("[render_sat] generating sat_dark")
-        dark = _make_dark(sat)            # sat + dark live (2×)
+    # Spill the dark variant to an on-disk memmap from the PRISTINE sat (before
+    # any baking mutates sat). Peak here is ~1× (sat + one strip + paged memmap).
+    fd, dark_tmp_name = tempfile.mkstemp(suffix=".darkraw", dir=str(out_tiles))
+    os.close(fd)
+    dark_tmp = Path(dark_tmp_name)
+    try:
+        ramet_log.log("[render_sat] spilling sat_dark to memmap")
+        dw, dh = _make_dark_to_memmap(sat, dark_tmp)
+        gc.collect()
+        ramet_log.trim()
 
-        # Step 3: tile plain sat_dark
-        write_pyramid(dark, out_tiles / "sat_dark", fmt="webp")
-        results.append(_emit("sat_dark", out_tiles / "sat_dark"))
+        if geojson_dir.is_dir():
+            # Bake light overlays INTO sat → baked_sat; tile; free sat
+            ramet_log.log("[render_sat] generating baked_sat")
+            _bake_overlays_inplace(sat, geojson_dir, world_size, _STYLE_LIGHT)
+            write_pyramid(sat, out_tiles / "baked_sat", fmt="webp")
+            results.append(_emit("baked_sat", out_tiles / "baked_sat"))
+            del sat
+            gc.collect()
+            ramet_log.trim()
 
-        # Step 4: bake light overlays INTO sat in place → baked_sat
-        ramet_log.log("[render_sat] generating baked_sat")
-        _bake_overlays_inplace(sat, geojson_dir, world_size, _STYLE_LIGHT)
-        write_pyramid(sat, out_tiles / "baked_sat", fmt="webp")
-        results.append(_emit("baked_sat", out_tiles / "baked_sat"))
-        del sat
-        gc.collect()
+            # Reload dark; tile sat_dark
+            ramet_log.log("[render_sat] tiling sat_dark")
+            dark = _load_dark_from_memmap(dark_tmp, dw, dh)
+            write_pyramid(dark, out_tiles / "sat_dark", fmt="webp")
+            results.append(_emit("sat_dark", out_tiles / "sat_dark"))
 
-        # Step 5: bake dark overlays INTO dark in place → baked_sat_dark
-        ramet_log.log("[render_sat] generating baked_sat_dark")
-        _bake_overlays_inplace(dark, geojson_dir, world_size, _STYLE_DARK)
-        write_pyramid(dark, out_tiles / "baked_sat_dark", fmt="webp")
-        results.append(_emit("baked_sat_dark", out_tiles / "baked_sat_dark"))
-        del dark
-        gc.collect()
-    else:
-        ramet_log.log(f"[render_sat] no geojson dir at {geojson_dir}, skipping baked variants")
-        ramet_log.log("[render_sat] generating sat_dark")
-        dark = _make_dark(sat)
-        del sat
-        gc.collect()
-        write_pyramid(dark, out_tiles / "sat_dark", fmt="webp")
-        results.append(_emit("sat_dark", out_tiles / "sat_dark"))
-        del dark
-        gc.collect()
+            # Bake dark overlays INTO dark → baked_sat_dark; tile; free
+            ramet_log.log("[render_sat] generating baked_sat_dark")
+            _bake_overlays_inplace(dark, geojson_dir, world_size, _STYLE_DARK)
+            write_pyramid(dark, out_tiles / "baked_sat_dark", fmt="webp")
+            results.append(_emit("baked_sat_dark", out_tiles / "baked_sat_dark"))
+            del dark
+            gc.collect()
+            ramet_log.trim()
+        else:
+            ramet_log.log(f"[render_sat] no geojson dir at {geojson_dir}, skipping baked variants")
+            del sat
+            gc.collect()
+            ramet_log.trim()
+            ramet_log.log("[render_sat] tiling sat_dark")
+            dark = _load_dark_from_memmap(dark_tmp, dw, dh)
+            write_pyramid(dark, out_tiles / "sat_dark", fmt="webp")
+            results.append(_emit("sat_dark", out_tiles / "sat_dark"))
+            del dark
+            gc.collect()
+            ramet_log.trim()
+    finally:
+        try:
+            dark_tmp.unlink()
+        except OSError:
+            pass
 
     ramet_log.log(
         f"[render_sat] done in {time.monotonic() - t0:.1f}s peak={ramet_log.peak_mb()}MB"
