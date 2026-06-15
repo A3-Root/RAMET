@@ -7,9 +7,16 @@ Input layout (default; can be overridden via RAMET_INGAME_OUTPUT_DIR on the C# s
         hires.png               # optional (preferred when present)
         index.json              # GMS PackageIndex metadata
 
+The aerial orthographic layer (cherry-picked from upstream GMS v2.2.0) is optional:
+
+    <Arma3>/arma3_mapexporter_output/{world}/
+        aerial.png              # optional in-game "satellite" imagery
+        index_aerial.json       # GMS PackageIndex metadata for the aerial layer
+
 Output:
 
-    <ramet_out>/{world}/tiles/ingame/{z}/{x}/{y}.png    (-> .webp after optimize)
+    <ramet_out>/{world}/tiles/ingame/{z}/{x}/{y}.png         (-> .webp after optimize)
+    <ramet_out>/{world}/tiles/ingame_aerial/{z}/{x}/{y}.png  (-> .webp after optimize)
 """
 from __future__ import annotations
 
@@ -57,8 +64,8 @@ def _pick_source(ingame_dir: Path) -> Path | None:
     return None
 
 
-def _read_index(ingame_dir: Path) -> dict:
-    p = ingame_dir / "index.json"
+def _read_index(ingame_dir: Path, name: str = "index.json") -> dict:
+    p = ingame_dir / name
     if not p.exists():
         return {}
     try:
@@ -67,19 +74,23 @@ def _read_index(ingame_dir: Path) -> dict:
         return {}
 
 
-def render(ingame_dir: Path, out_tiles: Path, world_size: float) -> LayerResult | None:
-    """Build tiles/ingame pyramid. Returns LayerResult or None if input absent."""
-    src_path = _pick_source(ingame_dir)
-    if src_path is None:
-        print(f"[render_ingame] no source under {ingame_dir}")
-        return None
-    print(f"[render_ingame] using {src_path.name}")
+def _render_source(
+    ingame_dir: Path,
+    src_path: Path,
+    index: dict,
+    out_tiles: Path,
+    world_size: float,
+    layer_id: str,
+) -> LayerResult:
+    """Resample a single GMS source PNG onto the RAMET world grid and write a pyramid.
 
+    Shared by the topographic (`ingame`) and aerial (`ingame_aerial`) layers — both
+    obey the same GMS PackageIndex coordinate convention (SizeInMeters / OriginX / OriginY).
+    """
     world = ingame_dir.name
     overrides = _load_overrides(world)
     scale = float(overrides.get("scaleFactor", 1.0)) or 1.0
 
-    index = _read_index(ingame_dir)
     gms_size_m = float(index.get("SizeInMeters") or world_size)
 
     # Effective world extent (in metres) covered by the source PNG.
@@ -108,14 +119,39 @@ def render(ingame_dir: Path, out_tiles: Path, world_size: float) -> LayerResult 
     px_tl, py_tl = world_to_pixel(world_x_left, world_y_top, wm, out_px)
     canvas.paste(src, (int(round(px_tl)), int(round(py_tl))), src)
 
-    target = out_tiles / "ingame"
+    target = out_tiles / layer_id
     write_pyramid(canvas, target, fmt="png")
 
     total, zmin, zmax = count_tiles(target, "png")
     return LayerResult(
-        layer_id="ingame",
+        layer_id=layer_id,
         ext="png",
         min_zoom=zmin if zmin is not None else 0,
         max_zoom=zmax if zmax is not None else 0,
         tile_count=total,
     )
+
+
+def render(ingame_dir: Path, out_tiles: Path, world_size: float) -> LayerResult | None:
+    """Build tiles/ingame pyramid. Returns LayerResult or None if input absent."""
+    src_path = _pick_source(ingame_dir)
+    if src_path is None:
+        print(f"[render_ingame] no source under {ingame_dir}")
+        return None
+    print(f"[render_ingame] using {src_path.name}")
+    index = _read_index(ingame_dir, "index.json")
+    return _render_source(ingame_dir, src_path, index, out_tiles, world_size, "ingame")
+
+
+def render_aerial(ingame_dir: Path, out_tiles: Path, world_size: float) -> LayerResult | None:
+    """Build tiles/ingame_aerial pyramid from aerial.png. Returns None if absent.
+
+    Old in-game exports without the aerial pass simply skip this layer.
+    """
+    src_path = ingame_dir / "aerial.png"
+    if not (src_path.exists() and src_path.stat().st_size > 0):
+        return None
+    print(f"[render_ingame] using {src_path.name} (aerial)")
+    # Aerial provenance lives in index_aerial.json; fall back to index.json (same Origin/Size).
+    index = _read_index(ingame_dir, "index_aerial.json") or _read_index(ingame_dir, "index.json")
+    return _render_source(ingame_dir, src_path, index, out_tiles, world_size, "ingame_aerial")

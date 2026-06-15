@@ -264,6 +264,13 @@ def process_world(world: str,
                 stage_results["render_ingame"] = {"ok": True}
             else:
                 stage_results["render_ingame"] = {"ok": False, "reason": "no source"}
+            # Aerial orthographic imagery (optional; absent on pre-v2.2.0 exports).
+            lr_aerial = render_ingame.render_aerial(ingame_root, out_tiles, float(world_size))
+            if lr_aerial is not None:
+                _append_layer_from_result(lr_aerial, {"ingame_aerial": "In-Game Aerial"})
+                stage_results["render_ingame_aerial"] = {"ok": True}
+            else:
+                stage_results["render_ingame_aerial"] = {"ok": False, "reason": "no source"}
         except Exception as exc:
             print(f"[orchestrate] {world}: render_ingame skipped — {exc}")
             stage_results["render_ingame"] = {"ok": False, "reason": "error", "err": str(exc)}

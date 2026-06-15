@@ -73,12 +73,35 @@ a3me_export = {
 
 	};
 
+	systemChat "Topo images are ready";
+
+	// Close the topo map dialog before switching to the 3D aerial camera.
+	closeDialog 0;
+
+	// RAMET: aerial orthographic imagery pass (cherry-picked from upstream v2.2.0).
+	if ( worldSize < 40960 ) then {
+
+		systemChat "Taking aerial screenshots...";
+
+		INFO("Start Aerial");
+
+		private _aerialData = _calibrateData call FUNC(aerialCalibrate);
+		_aerialData call FUNC(aerialLoop);
+
+		systemChat "Flush aerial image...";
+		sleep 0.2;
+
+		INFO("Stop Aerial");
+		"mapExportExtension" callExtension ["aerialstop", []];
+
+		(_aerialData select 0) cameraEffect ["terminate", "BACK"];
+		camDestroy (_aerialData select 0);
+		showHUD [true, true, true, true, true, true, true, true];
+	};
+
 	systemChat "Images are ready";
 
 	"mapExportExtension" callExtension ["dispose", [worldName, worldSize]];
-
-	// Close the export dialog.
-	closeDialog 0;
 };
 
 #define DIK_HOME 0xC7 /* Home on arrow keypad */

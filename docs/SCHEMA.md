@@ -39,6 +39,11 @@ read this schema directly.
 }
 ```
 
+Known raster layer ids: `sat`, `sat_dark`, `baked_sat`, `baked_sat_dark`, `topo`,
+`topo_dark`, `baked_topo`, `baked_topo_dark`, `ingame` (in-game topographic), and
+`ingame_aerial` (in-game orthographic "satellite" imagery, cherry-picked from GMS v2.2.0).
+`ingame_aerial` is only present when the in-game export produced `aerial.png`.
+
 ## vectorSource
 
 ```jsonc
