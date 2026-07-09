@@ -28,8 +28,8 @@ where docker >nul 2>nul || (
 )
 
 rem -------- 1) ocap-rt Docker render --------
-if exist "%ARMA_ROOT%\@ocap_renderterrain\ocap_renderterrain_process.bat" (
-    set "OCAP_BAT=%ARMA_ROOT%\@ocap_renderterrain\ocap_renderterrain_process.bat"
+if exist "%ARMA_ROOT%\@root_amet\ocap_renderterrain_process.bat" (
+    set "OCAP_BAT=%ARMA_ROOT%\@root_amet\ocap_renderterrain_process.bat"
 ) else if exist "%RAMET_ROOT%\subprojects\ocap-renderterrain\ocap_renderterrain_process.bat" (
     set "OCAP_BAT=%RAMET_ROOT%\subprojects\ocap-renderterrain\ocap_renderterrain_process.bat"
 ) else (

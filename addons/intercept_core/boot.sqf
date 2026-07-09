@@ -17,7 +17,7 @@ _res = "intercept" callExtension format["init_patch:%1", (productVersion select 
 "intercept" callExtension "invoker_begin_register:";
 
 
-_registerTypesResult = (call compile "interceptRegisterTypes parsingNamespace") param [0, false];
+private _registerTypesResult = (call compile "interceptRegisterTypes parsingNamespace") param [0, false];
 
 diag_log text format["Intercept initialization part 2/3: %1", _registerTypesResult];
 
@@ -31,7 +31,7 @@ for "_i" from 0 to (count _intercept_projects)-1 do {
                 private _plugin_name = getText(_module >> "pluginName");
                 if(_plugin_name != "") then {
                     diag_log text format["Intercept Loading Plugin: %1", _plugin_name];
-                    _cert = getText(_module >> "certificate");
+                    private _cert = getText(_module >> "certificate");
                     if (_cert != "") then {
                         "intercept" callExtension ("load_extension:" + _plugin_name+","+_cert);
                     } else {

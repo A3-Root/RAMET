@@ -3,8 +3,8 @@
 ## Prereqs
 
 - Arma 3 main + diagnostic branches both installed (Steam → Properties → Betas).
-- Mods present in Arma3 root: `@root_amet`, `@grad_meh`, `@intercept`, `@CBA_A3`, `@ocap_renderterrain`.
-  After `hemtt release` from RAMET root, unzip `releases/{ver}/root_amet-{ver}.zip` directly into the Arma 3 root — the bundle contains all four `@` folders, `batch/`, `tools/`, and the Docker context.
+- Mods present in Arma3 root: `@root_amet`, `@CBA_A3`.
+  After `.\release.ps1` (or `hemtt release` from RAMET root), unzip `releases\root_amet-{ver}.zip` directly into the Arma 3 root — `@root_amet` contains every addon (including the vendored Intercept and grad_meh/ocap_renderterrain, all absorbed into one mod), `batch\`, `tools\`, and the Docker context.
 - Docker Desktop running — **only host dependency for post-processing**. All tippecanoe / pmtiles / cwebp / pngquant / oxipng / Python / lxml work runs inside the `ramet-postprocess` image (built once from `tools\Dockerfile`).
 
 ## 1. Prep
@@ -13,9 +13,9 @@ Edit `@root_amet\batch\worlds.txt` — one CfgWorlds class name per line. Commen
 
 ## In-game UI overview
 
-Two pickers appear once `@root_amet` is loaded alongside `@grad_meh` + `@ocap_renderterrain`:
+Two pickers appear once `@root_amet` is loaded:
 
-- **Main-menu picker** (auto on launch + "RAMET — Bulk Export" spotlight tile). Overrides grad_meh's and ocap-rt's individual main-menu dialogs (each mod normally auto-opens its own UI on start, and the second one to fire wins — that's why it used to default to OCAP). RAMET shows a single two-option prompt (`Grad_meh` / `OCAP`); the choice opens the corresponding mod's interactive single-map exporter. Diagnostic-only options are disabled when running the stable branch.
+- **Main-menu picker** (auto on launch + "RAMET — Bulk Export" spotlight tile). RAMET shows a single two-option prompt (`Grad_meh` / `OCAP`); the choice opens the corresponding interactive single-map exporter. The grad_meh/in-game spotlight tiles show only on the stable binary; the OCAP tile shows only on the diagnostic binary (auto-detected — see "Diag detection" below).
 - **In-mission picker** (`Ctrl+Shift+R`, also auto-opens once after player init). Triggers the FlatDevil-driven worlds.txt bulk loop — `ramet_fnc_bulkExportGradMeh` or `ramet_fnc_bulkExportOcap`.
 
 Use the main-menu picker for one-off interactive exports; use the in-mission picker for fully automated bulk runs across the worlds.txt queue.
@@ -42,7 +42,7 @@ Steam → Arma 3 → Properties → Betas → choose **`development`** (diagnost
 batch\02_export_ocap.bat
 ```
 
-Same loop pattern, this time wrapping `\z\ocap_exporter\addons\exporter\export_data.sqf` from the `@ocap_renderterrain` mod. Requires `diag_exportTerrainSVG` (diag-only).
+Same loop pattern, this time calling `ocap_renderterrain_fnc_exportCurrentWorld` (vendored into `@root_amet`) and waiting on `ocap_exporter_done`. Requires the diagnostic binary — checked via `ramet_fnc_isDiagBuild`, not the unreliable `isNil "diag_exportTerrainSVG"` (that command name isn't a variable, so the naive check was always true).
 
 After each world, `ramet.stage.move_ocap()` shifts `Arma3/ocap_exporter/{w}/` into `ramet_intermediate/ocap_rt/{w}/`. If you toggle the "kickoff Docker render" option in-game (`ramet.kickoff.run_docker(world)`), the Docker render of that world starts in a background process while Arma continues to the next world.
 
@@ -87,6 +87,10 @@ Writes to `<Arma3>\ramet_output\_zips\`. SFTP/SCP those zips to the planner host
 - If a map fails the grad_meh pass (encrypted ebo / unsupported), step 1 logs the failure to `ramet_state/ramet_bulk.log`; step 5 emits a manifest with `"source": "ocap"` and no `vectorSource`. Planner hides the vector overlay toggles for that map.
 - Same in reverse if a map only has grad_meh output.
 - Manifest declares only what was produced; the planner renders only what's declared. No client-side fallback logic.
+
+## Diag detection
+
+`ramet_fnc_isDiagBuild` (cached in `uiNamespace getVariable "ramet_isDiagBuild"`, computed once in `XEH_preStart.sqf`) probes `supportInfo "u:diag_exportTerrainSVG*"` and `productVersion select 1 == "Arma3Diag"`. Spotlight tile conditions and the vendored Intercept boot sequence both read this cached flag — Intercept's host init is skipped entirely on the diag binary (its DLL previously crashed there scanning engine memory signatures that don't match the diag exe).
 
 ## Troubleshooting
 

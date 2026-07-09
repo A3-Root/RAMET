@@ -1,7 +1,7 @@
 class CfgFunctions {
 	class grad_meh {
 		class ui {
-			file = "\x\grad_meh\addons\ui\functions";
+			file = "\z\root_amet\addons\grad_meh_ui\functions";
 			class config_onLoad {};
 			class config_onUnLoad {};
 			class done_onLoad {};

@@ -1,7 +1,7 @@
 class CfgFunctions {
 	class ocap_renderterrain {
 		class exporter {
-			file = "\x\ocap_renderterrain\addons\exporter\functions";
+			file = "\z\root_amet\addons\ocap_exporter\functions";
 			class export {};
 			class fdCall {};
 			class exportCurrentWorld {};

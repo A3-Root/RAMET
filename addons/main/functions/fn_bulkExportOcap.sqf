@@ -50,7 +50,7 @@ private _kickDocker = {
 
 [format ["bulk ocap export starting (worldName=%1)", worldName]] call _log;
 
-if (isNil "diag_exportTerrainSVG") exitWith {
+if !([] call ramet_fnc_isDiagBuild) exitWith {
     ["ERROR: diag_exportTerrainSVG not available — must run on Arma diagnostic branch"] call _log;
 };
 
@@ -63,10 +63,11 @@ while {true} do {
     } else {
         [format ["exporting %1", _world]] call _log;
 
-        // ocap-exporter's export_data.sqf calls diag_exportTerrainSVG + the exporter extension.
-        // It blocks until done. Path resolved via @ocap_renderterrain mod load.
-        private _exportScript = "\z\ocap_exporter\addons\exporter\export_data.sqf";
-        [] call (compile preprocessFileLineNumbers _exportScript);
+        // Vendored ocap_renderterrain exporter: fires the async export then blocks
+        // until the done flag flips, matching the in-game bulk-export pattern.
+        ocap_exporter_done = false;
+        [] call ocap_renderterrain_fnc_exportCurrentWorld;
+        waitUntil { sleep 2; missionNamespace getVariable ["ocap_exporter_done", false] };
 
         [_world] call _kickDocker;
         [_world, true, ""] call _markDone;

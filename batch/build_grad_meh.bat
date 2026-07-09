@@ -1,14 +1,14 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
 
-rem Build grad_meh C++ plugin and deploy grad_meh_x64.dll to @grad_meh\intercept\.
+rem Build grad_meh C++ plugin and deploy grad_meh_x64.dll to @root_amet\intercept\.
 rem
 rem Requires:
 rem   - Visual Studio 2022 with MSVC C++ workload (or run from a VS Developer prompt)
 rem   - CMake 3.28+, Ninja, Conan 2.x, Rust (rustup)
 rem
 rem DLL source: subprojects\grad_meh\build\lib64\grad_meh_x64.dll
-rem DLL dest:   <Arma3>\@grad_meh\intercept\grad_meh_x64.dll
+rem DLL dest:   <Arma3>\@root_amet\intercept\grad_meh_x64.dll
 
 set "SCRIPT_DIR=%~dp0"
 pushd "%SCRIPT_DIR%.." >nul
@@ -29,7 +29,7 @@ if not defined ARMA_ROOT (
     echo [INFO] Registry lookup failed, using hardcoded Arma root: %ARMA_ROOT%
 )
 
-set "DLL_DST=%ARMA_ROOT%\@grad_meh\intercept"
+set "DLL_DST=%ARMA_ROOT%\@root_amet\intercept"
 
 echo RAMET root : %RAMET_ROOT%
 echo Arma root  : %ARMA_ROOT%
@@ -140,10 +140,12 @@ if not exist "%DLL_DST%" (
 
 copy /Y "%DLL_SRC%" "%DLL_DST%\grad_meh_x64.dll"
 if errorlevel 1 ( echo [ERR] copy failed. & exit /b 1 )
+copy /Y "%DLL_SRC%" "%ARMA_ROOT%\@root_amet\grad_meh_x64.dll"
+if errorlevel 1 ( echo [ERR] copy failed. & exit /b 1 )
 
 echo.
 echo === done ===
 echo grad_meh_x64.dll deployed to %DLL_DST%
-echo Run Arma 3 with @grad_meh + @intercept + @CBA_A3, then re-export your maps.
+echo Run Arma 3 with @root_amet + @CBA_A3, then re-export your maps.
 
 endlocal

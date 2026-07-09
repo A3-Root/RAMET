@@ -30,7 +30,6 @@ intercept_fnc_isNilWrapper = {
 };
 
 diag_log text "Intercept Invoker SQF handler initializing...";
-private _res = "intercept" callExtension "init_invoker:";
 
 //Check if invoker is working
 private _res = "intercept" callExtension "test_invoker:";
@@ -41,7 +40,7 @@ diag_log text format["Intercept Invoker test result: %1 == %2", _res, profileNam
 
 
 if(intercept_invoker_ok) then {
-    intercept_fnc_signal = compileFinal preProcessFileLineNumbers "\z\root_amet\addons\intercept_core\signal.sqf";
+    intercept_fnc_signal = compileFinal preprocessFileLineNumbers "\z\root_amet\addons\intercept_core\signal.sqf";
 
     addMissionEventHandler ["EachFrame", "interceptOnFrame"]; //Register our PFH
 

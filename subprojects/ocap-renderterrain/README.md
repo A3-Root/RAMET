@@ -1,3 +1,7 @@
+> **RAMET note:** this directory is native-source-only (Go exporter build chain +
+> `ocap-renderterrain/` Docker context). The addon PBOs described below were absorbed into
+> `@root_amet`'s `addons/ocap_exporter` + `addons/ocap_ui` — see repo-root `CLAUDE.md`.
+
 # Terrain Rendering for OCAP2
 
 ## Overview/History

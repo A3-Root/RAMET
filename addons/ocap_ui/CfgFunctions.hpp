@@ -1,7 +1,7 @@
 class CfgFunctions {
 	class ocap_renderterrain {
 		class ui {
-			file = "\x\ocap_renderterrain\addons\ui\functions";
+			file = "\z\root_amet\addons\ocap_ui\functions";
 			class done_onLoad {};
 			class done_onUnLoad {};
 			class loading_redraw {};

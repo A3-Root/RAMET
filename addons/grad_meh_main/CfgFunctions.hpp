@@ -1,7 +1,7 @@
 class CfgFunctions {
 	class grad_meh {
 		class main {
-			file = "\x\grad_meh\addons\main\functions";
+			file = "\z\root_amet\addons\grad_meh_main\functions";
 			class export {};
 			class stepStatus {};
 			class updateProgress {};

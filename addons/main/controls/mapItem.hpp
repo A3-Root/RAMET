@@ -45,7 +45,7 @@ class ramet_ingame_mapItem: ctrlControlsGroupNoScrollbars {
 			y = QUOTE(MAP_ITEM_H / 3 * GRID_W);
 			w = QUOTE(MAP_ITEM_W * GRID_W / 3);
 			h = QUOTE(MAP_ITEM_W * GRID_H / 3);
-			text = "\x\grad_meh\addons\ui\data\tick_ca.paa";
+			text = "\z\root_amet\addons\grad_meh_ui\data\tick_ca.paa";
 			show = 0;
 		};
 		class mouseHandler: ctrlButton {

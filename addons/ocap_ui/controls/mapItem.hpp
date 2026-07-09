@@ -44,7 +44,7 @@ class ocap_renderterrain_mapItem: ctrlControlsGroupNoScrollbars {
 			y = QUOTE(MAP_ITEM_H / 3 * GRID_W);
 			w = QUOTE(MAP_ITEM_W * GRID_W / 3);
 			h = QUOTE(MAP_ITEM_W * GRID_H / 3);
-			text = "\x\ocap_renderterrain\addons\ui\data\tick_ca.paa";
+			text = "\z\root_amet\addons\ocap_ui\data\tick_ca.paa";
 			show = 0;
 		};
 		class mouseHandler: ctrlButton {

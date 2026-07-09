@@ -1,3 +1,7 @@
+> **RAMET note:** this directory is native-source-only (CMake/Conan/Rust build chain for
+> `grad_meh_x64.dll`). The addon PBOs described below were absorbed into `@root_amet`'s
+> `addons/grad_meh_main` + `addons/grad_meh_ui` — see repo-root `CLAUDE.md`.
+
 # Gruppe Adler Map Exporter
 
 Added Baked Topo

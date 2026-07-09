@@ -11,7 +11,8 @@ git_hash = 0
 include = [
     "mod.cpp",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "ramet_logo.paa"
 ]
 exclude = [
     ".gitignore",

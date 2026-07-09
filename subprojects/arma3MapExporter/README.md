@@ -1,3 +1,8 @@
+> **RAMET note:** this directory is native-source-only (C# solution for
+> `MapExportExtension_x64.dll`, built via `dotnet publish` in `release.ps1`). The addon PBOs
+> described below were absorbed into `@root_amet`'s `addons/a3me_main` + `addons/a3me_exporter`
+> — see repo-root `CLAUDE.md`.
+
 # GameMapStorage.Arma3
 
 # How to export a map

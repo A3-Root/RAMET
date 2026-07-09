@@ -14,6 +14,12 @@ class CfgPatches {
     };
 };
 
+class Extended_PreStart_EventHandlers {
+    class ADDON {
+        init = QUOTE(call compile preprocessFileLineNumbers '\z\root_amet\addons\main\XEH_preStart.sqf');
+    };
+};
+
 class Extended_PreInit_EventHandlers {
     class ADDON {
         init = QUOTE(call compile preprocessFileLineNumbers '\z\root_amet\addons\main\XEH_preInit.sqf');
@@ -55,6 +61,7 @@ class CfgFunctions {
             class ingameMapItem_create {};
             class ingameMapItem_onClick {};
             class ingameExport {};
+            class isDiagBuild {};
         };
     };
 };
@@ -72,7 +79,7 @@ class CfgMainMenuSpotlight {
         video = "";
         action = "params ['_ctrl']; (ctrlParent _ctrl) createDisplay 'grad_meh_main';";
         actionText = "OPEN";
-        condition = "true";
+        condition = "!(uiNamespace getVariable ['ramet_isDiagBuild', false])";
     };
     class ramet_ocap {
         text = "RAMET — OCAP export (diag)";
@@ -81,7 +88,7 @@ class CfgMainMenuSpotlight {
         video = "";
         action = "params ['_ctrl']; (ctrlParent _ctrl) createDisplay 'ocap_renderterrain_main';";
         actionText = "OPEN";
-        condition = "true";
+        condition = "uiNamespace getVariable ['ramet_isDiagBuild', false]";
     };
     class ramet_ingame {
         text = "RAMET — In-Game export (GMS)";
@@ -90,6 +97,6 @@ class CfgMainMenuSpotlight {
         video = "";
         action = "params ['_ctrl']; (ctrlParent _ctrl) createDisplay 'ramet_ingame_main';";
         actionText = "OPEN";
-        condition = "true";
+        condition = "!(uiNamespace getVariable ['ramet_isDiagBuild', false])";
     };
 };

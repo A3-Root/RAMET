@@ -20,7 +20,10 @@ params ["_extensionName", "_signalName", "_parameters"];
 
 if !(intercept_invoker_ok) exitWith {false};
 
-[_extensionName,_signalName] interceptSignal _parameters;
+// interceptSignal is a custom command registered by the Intercept host DLL at runtime —
+// HEMTT's static SQF parser doesn't know it, so the call is wrapped in a compiled string
+// (same workaround grad_meh uses for gradMehExportMap) instead of raw top-level syntax.
+[[_extensionName,_signalName], _parameters] call compile "(_this select 0) interceptSignal (_this select 1);";
 
 //intercept_signal_var set[0, _parameters];
 //"intercept" callExtension format ["signal:%1,%2",_extensionName,_signalName];

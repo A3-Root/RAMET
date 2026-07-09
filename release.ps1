@@ -1,7 +1,9 @@
 # RAMET release wrapper.
-# Runs `hemtt release` in each subproject + RAMET root, then repackages the final
-# zip so @grad_meh / @ocap_renderterrain / @root_amet sit as siblings in the bundle
-# (HEMTT's own zip only contains @root_amet content; this wrapper adds the rest).
+# Builds the native DLL chains (grad_meh Conan/CMake/Ninja, arma3MapExporter dotnet AOT
+# publish), then runs a single `hemtt check` + `hemtt release` at the repo root.
+# @root_amet is the only mod produced — its post_build hook stages the FlatDevil
+# marker, ramet/ + ocap_renderterrain python packages, docs/tools/batch, and all
+# four native DLLs into the PBO output. releases\root_amet-{ver}.zip is the deliverable.
 
 [CmdletBinding()]
 param(
@@ -59,6 +61,20 @@ function Test-CommandPresent {
     return $false
 }
 
+function Find-GradMehDll {
+    param([string]$Repo)
+    $dll = Join-Path $Repo "build\lib64\grad_meh_x64.dll"
+    if (Test-Path $dll) { return $dll }
+    return $null
+}
+
+function Find-A3meDll {
+    param([string]$Repo)
+    $dll = Join-Path $Repo "publish\MapExportExtension_x64.dll"
+    if (Test-Path $dll) { return $dll }
+    return $null
+}
+
 function Write-PreflightReport {
     param(
         [string]$ResolvedVsDevCmd
@@ -81,31 +97,18 @@ function Write-PreflightReport {
     }
 
     $gradRepo = Join-Path $root "subprojects\grad_meh"
-    $ocapRepo = Join-Path $root "subprojects\ocap-renderterrain"
     $a3meRepo = Join-Path $root "subprojects\arma3MapExporter"
 
     $gradDll = Find-GradMehDll -Repo $gradRepo
-    $gradReleaseReady = Test-Path (Join-Path $gradRepo ".hemttout\release")
-    $ocapReleaseReady = Test-Path (Join-Path $ocapRepo ".hemttout\release")
-    $a3meReleaseReady = $false
-    foreach ($candidate in @(
-        (Join-Path $a3meRepo "@arma3MapExporter\.hemttout\release\@arma3MapExporter"),
-        (Join-Path $a3meRepo "@arma3MapExporter\.hemttout\release")
-    )) {
-        if (Test-Path (Join-Path $candidate "addons")) {
-            $a3meReleaseReady = $true
-            break
-        }
-    }
+    $a3meDll = Find-A3meDll -Repo $a3meRepo
 
     if (-not (Test-Path (Join-Path $root ".hemtt\project.toml"))) {
         $issues.Add(".hemtt\\project.toml is missing at the repository root.")
     }
 
     if ($SkipSubprojects) {
-        if (-not $gradReleaseReady) { $issues.Add("subprojects\\grad_meh\\.hemttout\\release is missing, but -SkipSubprojects was set.") }
-        if (-not $ocapReleaseReady) { $issues.Add("subprojects\\ocap-renderterrain\\.hemttout\\release is missing, but -SkipSubprojects was set.") }
-        if (-not $a3meReleaseReady) { $issues.Add("subprojects\\arma3MapExporter\\@arma3MapExporter\\.hemttout\\release is missing, but -SkipSubprojects was set.") }
+        if (-not $gradDll) { $issues.Add("subprojects\\grad_meh\\build\\lib64\\grad_meh_x64.dll is missing, but -SkipSubprojects was set.") }
+        if (-not $a3meDll) { $issues.Add("subprojects\\arma3MapExporter\\publish\\MapExportExtension_x64.dll is missing, but -SkipSubprojects was set.") }
     } else {
         if (-not $gradDll -or $RebuildGradMehDll) {
             if (-not (Test-CommandPresent -Name "conan")) { $issues.Add("conan is required to build grad_meh_x64.dll.") }
@@ -114,10 +117,8 @@ function Write-PreflightReport {
             if (-not (Test-CommandPresent -Name "cargo")) { $issues.Add("cargo is required to build grad_meh_x64.dll.") }
         }
 
-        if (-not $a3meReleaseReady) {
-            if (-not (Test-CommandPresent -Name "dotnet")) { $issues.Add("dotnet SDK is required to build @arma3MapExporter.") }
-            if (-not $ResolvedVsDevCmd) { $issues.Add("VsDevCmd.bat is required to build @arma3MapExporter.") }
-        }
+        if (-not (Test-CommandPresent -Name "dotnet")) { $issues.Add("dotnet SDK is required to build @arma3MapExporter.") }
+        if (-not $ResolvedVsDevCmd) { $issues.Add("VsDevCmd.bat is required to build @arma3MapExporter.") }
     }
 
     Write-Host "=== preflight ===" -ForegroundColor Cyan
@@ -143,25 +144,9 @@ if (-not $VsDevCmd) {
 $VsDevCmd = Resolve-VsDevCmd -PreferredPath $VsDevCmd
 Write-PreflightReport -ResolvedVsDevCmd $VsDevCmd
 
-function Invoke-Hemtt {
-    param([string]$Dir)
-    Push-Location $Dir
-    try {
-        Write-Host "  > hemtt $($CheckArgs -join ' ')" -ForegroundColor DarkGray
-        & hemtt @CheckArgs
-        if ($LASTEXITCODE -ne 0) { throw "hemtt check failed in $Dir (exit $LASTEXITCODE) — release skipped" }
-        Write-Host "  > hemtt release" -ForegroundColor DarkGray
-        & hemtt release
-        if ($LASTEXITCODE -ne 0) { throw "hemtt release failed in $Dir (exit $LASTEXITCODE)" }
-    } finally { Pop-Location }
-}
-
 if ($Clean) {
     Get-ChildItem -Path `
-        "subprojects\grad_meh\.hemttout", `
-        "subprojects\ocap-renderterrain\.hemttout", `
-        "subprojects\arma3MapExporter\@arma3MapExporter\.hemttout", `
-        "subprojects\arma3MapExporter\@arma3MapExporter\addons\*\*.pbo", `
+        "subprojects\arma3MapExporter\publish", `
         ".hemttout", "releases" -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force
 }
 
@@ -195,51 +180,36 @@ exit /b 0
     }
 }
 
-function Find-GradMehDll {
-    param([string]$Repo)
-    $dll = Join-Path $Repo "build\lib64\grad_meh_x64.dll"
-    if (Test-Path $dll) { return $dll }
-    return $null
-}
-
 function Build-Arma3MapExporter {
-    # Two-stage build (matches upstream build.ps1):
-    #   1) dotnet publish -> MapExportExtension_x64.dll into @arma3MapExporter\
-    #   2) hemtt release  (inside @arma3MapExporter\) -> packed PBOs into .hemttout\release\
-    # Returns the path to the .hemttout\release\@arma3MapExporter dir on success, else $null.
+    # dotnet publish (native AOT) -> subprojects\arma3MapExporter\publish\MapExportExtension_x64.dll.
+    # The addons that used to ship alongside it now live in root addons\a3me_main / a3me_exporter,
+    # built as part of the single root `hemtt release` below.
     param([string]$Repo)
     if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) {
-        Write-Warning "dotnet SDK not on PATH — @arma3MapExporter will not be rebuilt."
-        return $null
+        Write-Warning "dotnet SDK not on PATH — @arma3MapExporter DLL will not be rebuilt."
+        return $false
     }
     $csproj = Join-Path $Repo "MapExportExtension\MapExportExtension.csproj"
-    $modDir = Join-Path $Repo "@arma3MapExporter"
+    $publishDir = Join-Path $Repo "publish"
     if (-not (Test-Path $csproj)) {
         Write-Warning "$csproj not found — skipping arma3MapExporter build."
-        return $null
-    }
-    if (-not (Test-Path (Join-Path $modDir ".hemtt\project.toml"))) {
-        Write-Warning "$modDir\.hemtt\project.toml missing — cannot run hemtt release."
-        return $null
+        return $false
     }
 
-    Write-Host "  > dotnet publish $csproj -> $modDir" -ForegroundColor DarkGray
-    # PublishAot in this project chains MSVC link.exe via vswhere.exe (Visual Studio
-    # Installer dir). PATH usually lacks both, so wrap the publish in VsDevCmd.bat —
-    # same trick Build-GradMehDll uses for its CMake/Ninja chain.
+    Write-Host "  > dotnet publish $csproj -> $publishDir" -ForegroundColor DarkGray
+    # PublishAot chains MSVC link.exe via vswhere.exe (Visual Studio Installer dir).
+    # PATH usually lacks both, so wrap the publish in VsDevCmd.bat — same trick
+    # Build-GradMehDll uses for its CMake/Ninja chain.
     if (-not (Test-Path $VsDevCmd)) {
         Write-Warning "VsDevCmd.bat not found at '$VsDevCmd' — needed for AOT link. Set -VsDevCmd or env RAMET_VSDEVCMD."
-        return
+        return $false
     }
-    # The AOT toolchain shells out to `vswhere.exe` to discover MSVC link.exe.
-    # vswhere ships with the VS Installer, which is NOT added to PATH by VsDevCmd.
-    # Prepend the installer dir so AOT linking works on a stock dev box.
     $vsInstaller = "C:\Program Files (x86)\Microsoft Visual Studio\Installer"
     $publishScript = @"
 @echo off
 set "PATH=$vsInstaller;%PATH%"
 call "$VsDevCmd" -arch=x64 -host_arch=x64 -vcvars_ver=$VcVarsVer || exit /b 1
-dotnet publish "$csproj" -r win-x64 -c Release -o "$modDir" || exit /b 1
+dotnet publish "$csproj" -r win-x64 -c Release -o "$publishDir" || exit /b 1
 exit /b 0
 "@
     $tmp = New-TemporaryFile
@@ -252,177 +222,43 @@ exit /b 0
     } finally { Remove-Item $bat -Force -ErrorAction SilentlyContinue }
     if ($publishRc -ne 0) {
         Write-Warning "dotnet publish failed for $csproj (exit $publishRc)."
-        return
+        return $false
     }
-
-    # HEMTT must run from the mod root (where .hemtt/ lives).
-    Push-Location $modDir
-    $hemttOk = $false
-    try {
-        Write-Host "  > hemtt $($CheckArgs -join ' ')  (in $modDir)" -ForegroundColor DarkGray
-        & hemtt @CheckArgs | Out-Host
-        if ($LASTEXITCODE -ne 0) {
-            Write-Warning "hemtt check failed in $modDir (exit $LASTEXITCODE) — release skipped"
-        } else {
-            Write-Host "  > hemtt release  (in $modDir)" -ForegroundColor DarkGray
-            & hemtt release | Out-Host
-            if ($LASTEXITCODE -ne 0) {
-                Write-Warning "hemtt release failed in $modDir (exit $LASTEXITCODE)"
-            } else {
-                $hemttOk = $true
-            }
-        }
-    } finally { Pop-Location }
-
-    if (-not $hemttOk) { return }
-
-    $candidates = @(
-        (Join-Path $modDir ".hemttout\release\@arma3MapExporter"),
-        (Join-Path $modDir ".hemttout\release")
-    )
-    foreach ($c in $candidates) {
-        if (Test-Path (Join-Path $c "addons")) {
-            # Single output: the resolved path. Anything else would pollute the caller's variable.
-            Write-Output $c
-            return
-        }
-    }
-    Write-Warning "hemtt release produced no recognisable @arma3MapExporter tree under $modDir\.hemttout"
+    return (Test-Path (Join-Path $publishDir "MapExportExtension_x64.dll"))
 }
 
-$a3meReleaseDir = $null
 if (-not $SkipSubprojects) {
-    Write-Host "=== building subprojects/grad_meh ===" -ForegroundColor Cyan
-    Invoke-Hemtt "subprojects\grad_meh"
-    Write-Host "=== building subprojects/ocap-renderterrain ===" -ForegroundColor Cyan
-    Invoke-Hemtt "subprojects\ocap-renderterrain"
-    Write-Host "=== building subprojects/arma3MapExporter (dotnet AOT + hemtt release) ===" -ForegroundColor Cyan
-    $a3meExistingCandidates = @(
-        (Join-Path $root "subprojects\arma3MapExporter\@arma3MapExporter\.hemttout\release\@arma3MapExporter"),
-        (Join-Path $root "subprojects\arma3MapExporter\@arma3MapExporter\.hemttout\release")
-    )
-    foreach ($c in $a3meExistingCandidates) {
-        if (Test-Path (Join-Path $c "addons")) { $a3meReleaseDir = $c; break }
-    }
-    if (-not $a3meReleaseDir) {
-        $a3meReleaseDir = Build-Arma3MapExporter -Repo (Join-Path $root "subprojects\arma3MapExporter")
-    } else {
-        Write-Host "  > reusing existing @arma3MapExporter release at $a3meReleaseDir" -ForegroundColor DarkGray
-    }
-}
-if (-not $a3meReleaseDir) {
-    # SkipSubprojects path, or previous build attempt — locate prior hemtt release output.
-    $a3meCandidates = @(
-        (Join-Path $root "subprojects\arma3MapExporter\@arma3MapExporter\.hemttout\release\@arma3MapExporter"),
-        (Join-Path $root "subprojects\arma3MapExporter\@arma3MapExporter\.hemttout\release")
-    )
-    foreach ($c in $a3meCandidates) {
-        if (Test-Path (Join-Path $c "addons")) { $a3meReleaseDir = $c; break }
-    }
-}
-
-Write-Host "=== building RAMET ===" -ForegroundColor Cyan
-Invoke-Hemtt $root
-
-# Derive version from the zip HEMTT just produced (root_amet-{ver}.zip, excluding -latest)
-$verZip = Get-ChildItem -Path (Join-Path $root "releases") -Filter "root_amet-*.zip" -ErrorAction SilentlyContinue |
-    Where-Object { $_.BaseName -notlike "*-latest*" -and $_.BaseName -notlike "*-bundle*" } |
-    Sort-Object LastWriteTime -Descending | Select-Object -First 1
-if ($verZip) {
-    $ver = $verZip.BaseName -replace '^root_amet-', ''
-} else {
-    $ver = (Get-Date -Format "yyyyMMdd-HHmmss")
-}
-
-$stagingRoot = Join-Path $root "releases\_bundle"
-if (Test-Path $stagingRoot) { Remove-Item $stagingRoot -Recurse -Force }
-New-Item -ItemType Directory -Path $stagingRoot | Out-Null
-
-# 1) @root_amet — copy what hemtt produced (already contains $FLATDEVIL$, ramet/, docs/, tools/, batch/)
-$ramOut = Join-Path $root ".hemttout\release"
-if (-not (Test-Path $ramOut)) { throw "Expected $ramOut from hemtt release" }
-Copy-Item -Path $ramOut -Destination (Join-Path $stagingRoot "@root_amet") -Recurse
-
-# 2) @grad_meh and @ocap_renderterrain — from each subproject's .hemttout/release.
-# @ocap_renderterrain's own bundle hook already plants ocap_renderterrain/ (Docker context)
-# and ocap_renderterrain_process.bat inside it — no extra copy needed here.
-$gradOut = Join-Path $root "subprojects\grad_meh\.hemttout\release"
-$ocapOut = Join-Path $root "subprojects\ocap-renderterrain\.hemttout\release"
-if (Test-Path $gradOut) {
-    Copy-Item -Path $gradOut -Destination (Join-Path $stagingRoot "@grad_meh") -Recurse
-
-    # Stage the native Intercept plugin DLL produced by the CMake/Conan/Ninja build.
-    # Without this DLL, Intercept logs "Client plugin: grad_meh was not found"
-    # and every `gradMehExportMap` call fails with
-    # "grad_meh native SQF commands are unavailable".
     $gradRepo = Join-Path $root "subprojects\grad_meh"
-    $gradDll  = Find-GradMehDll -Repo $gradRepo
+    $gradDll = Find-GradMehDll -Repo $gradRepo
     if ($RebuildGradMehDll -or -not $gradDll) {
         Write-Host "=== building grad_meh native DLL (Conan + CMake + Ninja) ===" -ForegroundColor Cyan
         if (-not (Build-GradMehDll -Repo $gradRepo)) {
             throw "grad_meh DLL build failed — re-run with -RebuildGradMehDll or build it manually."
         }
-        $gradDll = Find-GradMehDll -Repo $gradRepo
     }
-    if ($gradDll) {
-        $null = New-Item -ItemType Directory -Force -Path (Join-Path $stagingRoot "@grad_meh\intercept")
-        Copy-Item -Path $gradDll -Destination (Join-Path $stagingRoot "@grad_meh\intercept\grad_meh_x64.dll")
-        Write-Host "  + staged $gradDll -> @grad_meh\intercept\grad_meh_x64.dll" -ForegroundColor DarkGray
-        Copy-Item -Path $gradDll -Destination (Join-Path $stagingRoot "@grad_meh\grad_meh_x64.dll")
-        Write-Host "  + staged $gradDll -> @grad_meh\grad_meh_x64.dll" -ForegroundColor DarkGray
-    } else {
-        Write-Warning "grad_meh_x64.dll still missing after build attempt — bundle will lack native SQF commands."
+
+    Write-Host "=== building arma3MapExporter native DLL (dotnet AOT publish) ===" -ForegroundColor Cyan
+    if (-not (Build-Arma3MapExporter -Repo (Join-Path $root "subprojects\arma3MapExporter"))) {
+        Write-Warning "arma3MapExporter DLL build failed — @root_amet will bundle without it (in-game export unavailable)."
     }
-} else {
-    Write-Warning "$gradOut missing — @grad_meh not bundled"
-}
-if (Test-Path $ocapOut) {
-    Copy-Item -Path $ocapOut -Destination (Join-Path $stagingRoot "@ocap_renderterrain") -Recurse
-} else {
-    Write-Warning "$ocapOut missing — @ocap_renderterrain not bundled"
 }
 
-# 3) @arma3MapExporter — packed PBOs from hemtt release + native AOT DLL.
-#    Build-Arma3MapExporter ran dotnet publish + hemtt release; result lives in
-#    subprojects\arma3MapExporter\@arma3MapExporter\.hemttout\release\(@arma3MapExporter|).
-# Coerce to a single string in case a caller leaked extra output into the variable.
-if ($a3meReleaseDir -is [array]) {
-    $a3meReleaseDir = $a3meReleaseDir | Where-Object { $_ -and (Test-Path (Join-Path $_ "addons") -ErrorAction SilentlyContinue) } | Select-Object -Last 1
-}
-if ($a3meReleaseDir -and (Test-Path (Join-Path $a3meReleaseDir "addons"))) {
-    $a3meDst = Join-Path $stagingRoot "@arma3MapExporter"
-    Copy-Item -Path $a3meReleaseDir -Destination $a3meDst -Recurse
-    Write-Host "  + staged @arma3MapExporter from $a3meReleaseDir" -ForegroundColor DarkGray
+Write-Host "=== building RAMET ===" -ForegroundColor Cyan
+Write-Host "  > hemtt $($CheckArgs -join ' ')" -ForegroundColor DarkGray
+& hemtt @CheckArgs
+if ($LASTEXITCODE -ne 0) { throw "hemtt check failed (exit $LASTEXITCODE) — release skipped" }
+Write-Host "  > hemtt release" -ForegroundColor DarkGray
+& hemtt release
+if ($LASTEXITCODE -ne 0) { throw "hemtt release failed (exit $LASTEXITCODE)" }
 
-    # HEMTT [files] include lists MapExportExtension_x64.dll, but only if it sat next to
-    # project.toml at build time. Re-stage explicitly as a safety net.
-    $a3meDll = Join-Path $root "subprojects\arma3MapExporter\@arma3MapExporter\MapExportExtension_x64.dll"
-    if ((Test-Path $a3meDll) -and -not (Test-Path (Join-Path $a3meDst "MapExportExtension_x64.dll"))) {
-        Copy-Item -Path $a3meDll -Destination (Join-Path $a3meDst "MapExportExtension_x64.dll")
-        Write-Host "  + staged MapExportExtension_x64.dll" -ForegroundColor DarkGray
-    }
-    if (-not (Test-Path (Join-Path $a3meDst "MapExportExtension_x64.dll"))) {
-        Write-Warning "MapExportExtension_x64.dll missing in @arma3MapExporter bundle — extension calls will fail."
-    }
-} else {
-    Write-Warning "no hemtt release output for @arma3MapExporter found — not bundled. Re-run without -SkipSubprojects with .NET 10 SDK + HEMTT installed."
-}
-
-# 4) Zip the bundle
-$outZip = Join-Path $root "releases\root_amet-$ver-bundle.zip"
-$latestZip = Join-Path $root "releases\root_amet-latest-bundle.zip"
-if (Test-Path $outZip) { Remove-Item $outZip -Force }
-if (Test-Path $latestZip) { Remove-Item $latestZip -Force }
-
-Compress-Archive -Path (Join-Path $stagingRoot "*") -DestinationPath $outZip
-if ((Resolve-Path $outZip).Path -ne (Resolve-Path -LiteralPath $latestZip -ErrorAction SilentlyContinue).Path) {
-    Copy-Item -Path $outZip -Destination $latestZip -Force
-}
+$verZip = Get-ChildItem -Path (Join-Path $root "releases") -Filter "root_amet-*.zip" -ErrorAction SilentlyContinue |
+    Where-Object { $_.BaseName -notlike "*-latest*" } |
+    Sort-Object LastWriteTime -Descending | Select-Object -First 1
 
 Write-Host ""
-Write-Host "Bundle ready:" -ForegroundColor Green
-Write-Host "  $outZip"
-Write-Host "  $latestZip"
-Write-Host ""
-Write-Host "Staging tree:" -ForegroundColor Green
-Get-ChildItem $stagingRoot | Format-Table Name, Length, LastWriteTime -AutoSize
+if ($verZip) {
+    Write-Host "Release ready:" -ForegroundColor Green
+    Write-Host "  $($verZip.FullName)"
+} else {
+    Write-Warning "hemtt release completed but no releases\root_amet-*.zip was found."
+}

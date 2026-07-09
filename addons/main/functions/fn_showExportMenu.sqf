@@ -17,7 +17,7 @@ if (!isNil "ramet_exportRunning" && {ramet_exportRunning}) exitWith {
 };
 
 private _gradAvailable = !isNil "gradMehExportMap";
-private _ocapAvailable = !isNil "diag_exportTerrainSVG";
+private _ocapAvailable = [] call ramet_fnc_isDiagBuild;
 private _ingameAvailable = !isNil "a3me_export";
 
 private _msg = format [
@@ -43,7 +43,7 @@ private _msg = format [
     },
     {
         // NO button -> ocap
-        if (isNil "diag_exportTerrainSVG") exitWith {
+        if !([] call ramet_fnc_isDiagBuild) exitWith {
             hint "OCAP exporter not available — diagnostic branch required.";
         };
         ramet_exportRunning = true;
