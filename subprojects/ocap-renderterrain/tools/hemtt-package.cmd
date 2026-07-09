@@ -18,7 +18,7 @@ if /I "%MODE%"=="release" (
 )
 if errorlevel 1 goto :fail
 
-echo HEMTT %MODE% completed. The post_build hook bundled the Archangel runtime files.
+echo HEMTT %MODE% completed. The post_build hook bundled the FlatDevil runtime files.
 popd
 exit /b 0
 

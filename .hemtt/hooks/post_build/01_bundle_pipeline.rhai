@@ -12,13 +12,13 @@ print("[RAMET post_build] staging in-addon assets");
 let rfs = HEMTT_RFS;
 let out = HEMTT_OUT;
 
-// Archangel marker — Archangel scans loaded mods for this file
-let arch_src = rfs.join("modules").join("$ARCHANGEL$");
-if arch_src.exists() {
-    arch_src.copy(out.join("$ARCHANGEL$"));
+// FlatDevil marker — FlatDevil scans loaded mods for this file
+let fd_src = rfs.join("modules").join("$FLATDEVIL$");
+if fd_src.exists() {
+    fd_src.copy(out.join("$FLATDEVIL$"));
 }
 
-// ramet python module (referenced by $ARCHANGEL$ marker)
+// ramet python module (referenced by $FLATDEVIL$ marker)
 let ramet_src = rfs.join("ramet");
 if ramet_src.exists() {
     ramet_src.copy(out.join("ramet"));

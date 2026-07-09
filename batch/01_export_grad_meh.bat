@@ -23,7 +23,7 @@ rem Reset bulk state so the run starts from a clean queue.
 if exist "%ARMA_ROOT%\ramet_state\bulk_state.json" del /q "%ARMA_ROOT%\ramet_state\bulk_state.json"
 
 echo Launching Arma 3 (main) for grad_meh bulk export...
-echo NOTE: load any world from worlds.txt; the in-game loop iterates the rest via Archangel.
+echo NOTE: load any world from worlds.txt; the in-game loop iterates the rest via FlatDevil.
 start "" "arma3_64.exe" -mod=@root_amet;@grad_meh;@ocap_renderterrain;@intercept;@CBA_A3 -world=empty -nosound -noPause -nosplash -window
 
 echo.

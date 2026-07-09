@@ -1,3 +1,4 @@
+PREP(fdCall);
 PREP(bulkExportGradMeh);
 PREP(bulkExportOcap);
 PREP(bulkExportInGame);

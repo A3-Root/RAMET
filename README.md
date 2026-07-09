@@ -2,7 +2,7 @@
 
 **Root's Arma Map Export Tool** — single source of truth for exporting Arma 3 terrain into planner-ready raster + vector tile sets.
 
-RAMET absorbs two upstream tools (`grad_meh` on Arma main branch, `ocap-renderterrain` on Arma diagnostic branch), drives both with one bulk-export workflow over [Archangel](../ARCHANGEL), post-processes their outputs into a unified `output/{world}/` tree, and ships everything (mods + Docker context + Python tools + batch scripts) as one `hemtt release` bundle. The output drops directly into [JSOC-OPS-Warlords](../JSOC-OPS-Warlords) as the planner's tile source.
+RAMET absorbs two upstream tools (`grad_meh` on Arma main branch, `ocap-renderterrain` on Arma diagnostic branch), drives both with one bulk-export workflow over [FlatDevil](../FlatDevil), post-processes their outputs into a unified `output/{world}/` tree, and ships everything (mods + Docker context + Python tools + batch scripts) as one `hemtt release` bundle. The output drops directly into [JSOC-OPS-Warlords](../JSOC-OPS-Warlords) as the planner's tile source.
 
 ## Quick start
 
@@ -13,7 +13,9 @@ RAMET absorbs two upstream tools (`grad_meh` on Arma main branch, `ocap-renderte
    (Skip the subproject builds with `-SkipSubprojects` once they're already built. `-Clean` wipes prior `.hemttout/` and `releases/` first.)
 
    `release.ps1` runs `hemtt check -p -Lc14 -e` then `hemtt release` in each subproject and the RAMET root, and repackages the produced zips into `releases\root_amet-{ver}-bundle.zip`. Unzip that into your Arma 3 root. Layout:
-   - `@root_amet\` — addon + `$ARCHANGEL$`, `ramet\`, `tools\`, `batch\`, `docs\`
+   - `@root_amet\` — addon + `$FLATDEVIL$`, `ramet\`, `tools\`, `batch\`, `docs\`
+
+   Prerequisite: `flatdevil_x64.dll` (from [FlatDevil](../FlatDevil)) in the Arma 3 root and a system Python 3.7+ install — FlatDevil discovers the interpreter at runtime.
    - `@grad_meh\` — Intercept-based grad_meh mod
    - `@ocap_renderterrain\` — ocap-rt addon + Docker context (`ocap_renderterrain\`) + `ocap_renderterrain_process.bat`
 
@@ -37,7 +39,7 @@ All three mods (`@root_amet`, `@grad_meh`, `@ocap_renderterrain`) are loaded tog
 | 4a   | `batch\04_deploy.bat`           | —      | Copy `Arma3\ramet_output\{world}\` into the local planner repo |
 | 4b   | `batch\05_zip_for_upload.bat`   | —      | Pack each world (or `--bundle` all) into `Arma3\ramet_output\_zips\*.zip` for SFTP to a remote planner |
 
-Inside Arma, both bulk-export missions use Archangel (`"archangel" callExtension ["ramet.bulk.next_world", []]` etc.) to share queue state with the Python `ramet/` module, so the run survives crashes and per-world branch swaps.
+Inside Arma, both bulk-export missions use FlatDevil (`["ramet.bulk.next_world", ["grad_meh"]] call ramet_fnc_fdCall` etc.) to share queue state with the Python `ramet/` module, so the run survives crashes and per-world branch swaps.
 
 Step 3 can be paused between worlds by creating `Arma3\ramet.pause` while `batch\03_postprocess.bat` is running. The Docker orchestrator checks for that sentinel before starting each next world and waits while it exists. Delete `Arma3\ramet.pause` to resume.
 
@@ -47,8 +49,8 @@ Step 3 can be paused between worlds by creating `Arma3\ramet.pause` while `batch
 RAMET/
 ├── .hemtt/hooks/        # pre_build stages subproject releases; post_build bundles everything
 ├── addons/main/         # @root_amet — XEH, two bulk-export SQF functions
-├── modules/$ARCHANGEL$  # marker so Archangel adds `ramet` to sys.path
-├── ramet/               # Python module exposed via Archangel (bulk / stage / kickoff)
+├── modules/$FLATDEVIL$  # marker so FlatDevil adds `ramet` to sys.path
+├── ramet/               # Python module exposed via FlatDevil (bulk / stage / kickoff)
 ├── tools/               # Post-processing: orchestrate, slice_svg, geojson_to_pmtiles,
 │                        #   merge_outputs, optimize_tiles, verify, deploy_to_planner
 ├── batch/               # Operator runbook (.bat) + worlds.txt

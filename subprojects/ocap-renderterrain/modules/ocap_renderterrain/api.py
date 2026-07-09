@@ -3,8 +3,33 @@ import subprocess
 import threading
 from pathlib import Path
 
+try:
+    import flatdevil
+except ImportError:  # running outside the bridge (tests, tooling)
+    flatdevil = None
+
 _jobs = {}
 _lock = threading.Lock()
+
+
+def _notify(key, status, error="", output=""):
+    """Push a status transition to SQF via the FlatDevil engine callback."""
+    if flatdevil is None:
+        return
+    try:
+        flatdevil.callback(
+            "ocap_renderterrain.status",
+            [key, status, error, "" if output is None else str(output)],
+        )
+    except Exception:
+        pass  # a lost push must never kill the docker job thread
+
+
+def _set_job(key, status, error="", output="", log=""):
+    """Record a job state transition and push it to any SQF listener."""
+    with _lock:
+        _jobs[key] = {"status": status, "error": error, "output": output, "log": log}
+    _notify(key, status, error, output)
 
 
 def _result(status, **values):
@@ -67,13 +92,7 @@ def _run(world_name):
         if not docker_context.exists():
             raise RuntimeError(f"Docker context not found: {docker_context}")
 
-        with _lock:
-            _jobs[key] = {
-                "status": "building",
-                "error": "",
-                "output": output_dir,
-                "log": log_file,
-            }
+        _set_job(key, "building", output=output_dir, log=log_file)
         _run_logged(
             ["docker", "build", "-t", "ocap-renderterrain:latest", str(docker_context)],
             cwd=mod_root,
@@ -86,13 +105,7 @@ def _run(world_name):
             check=False,
         )
 
-        with _lock:
-            _jobs[key] = {
-                "status": "running",
-                "error": "",
-                "output": output_dir,
-                "log": log_file,
-            }
+        _set_job(key, "running", output=output_dir, log=log_file)
         _run_logged(
             [
                 "docker",
@@ -116,21 +129,15 @@ def _run(world_name):
             log_file=log_file,
         )
 
-        with _lock:
-            _jobs[key] = {
-                "status": "done",
-                "error": "",
-                "output": output_dir / key,
-                "log": log_file,
-            }
+        _set_job(key, "done", output=output_dir / key, log=log_file)
     except Exception as exc:
-        with _lock:
-            _jobs[key] = {
-                "status": "error",
-                "error": f"{exc}; see {log_file}",
-                "output": output_dir / key,
-                "log": log_file,
-            }
+        _set_job(
+            key,
+            "error",
+            error=f"{exc}; see {log_file}",
+            output=output_dir / key,
+            log=log_file,
+        )
 
 
 def process_world(world_name):
@@ -140,6 +147,7 @@ def process_world(world_name):
         if current and current.get("status") in {"queued", "building", "running"}:
             return _result(current["status"], output=current.get("output", ""))
         _jobs[key] = {"status": "queued", "error": "", "output": ""}
+    _notify(key, "queued")
 
     threading.Thread(target=_run, args=(key,), daemon=True).start()
     return _result("queued", output="")

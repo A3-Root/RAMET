@@ -3,7 +3,7 @@
  * Description: Bulk-export every world in worlds.txt via GMS (arma3MapExporter).
  *              Drives the existing `a3me_export` SQF function directly per world,
  *              polls the C# extension status until Done/Error, advances the queue.
- *              Requires @arma3MapExporter + CBA + Archangel + RAMET.
+ *              Requires @arma3MapExporter + CBA + RAMET + flatdevil_x64.dll in Arma root.
  *
  * Public: No
  *
@@ -16,18 +16,27 @@
 if (!isServer) exitWith {};
 
 private _next = {
-    private _r = "archangel" callExtension ["ramet.bulk.next_world", ["ingame"]];
-    _r param [0, "", [""]]
+    private _r = ["ramet.bulk.next_world", ["ingame"]] call ramet_fnc_fdCall;
+    _r params ["_ok", ["_value", []]];
+    if (!_ok) exitWith {
+        // bridge failure ends the queue: an empty world name stops the loop
+        diag_log text format ["[RAMET ingame] ERROR next_world: %1", _r];
+        ""
+    };
+    _value param [0, "", [""]]
 };
 
 private _markDone = {
     params ["_world", "_ok", ["_err", ""]];
-    "archangel" callExtension ["ramet.bulk.mark_done", ["ingame", _world, str _ok, _err]];
+    private _r = ["ramet.bulk.mark_done", ["ingame", _world, _ok, _err]] call ramet_fnc_fdCall;
+    if !(_r select 0) then {
+        diag_log text format ["[RAMET ingame] ERROR mark_done %1: %2", _world, _r];
+    };
 };
 
 private _log = {
     params ["_msg"];
-    "archangel" callExtension ["ramet.bulk.log_progress", [_msg]];
+    ["ramet.bulk.log_progress", [_msg]] call ramet_fnc_fdCall;
     diag_log text format ["[RAMET ingame] %1", _msg];
 };
 
@@ -80,6 +89,14 @@ while {true} do {
     };
 };
 
-private _summary = "archangel" callExtension ["ramet.bulk.export_summary", ["ingame"]];
-[format ["bulk ingame export complete — %1", _summary]] call _log;
+private _r = ["ramet.bulk.export_summary", ["ingame"]] call ramet_fnc_fdCall;
+_r params ["_ok", ["_summary", []]];
+if (!_ok) then {
+    diag_log text format ["[RAMET ingame] ERROR export_summary: %1", _r];
+};
+_summary params [["_total", 0, [0]], ["_skipped", 0, [0]], ["_names", "", [""]]];
+[format ["bulk ingame export complete — %1 processed, %2 skipped", _total, _skipped]] call _log;
+if (_skipped > 0) then {
+    [format ["skipped maps: %1", _names]] call _log;
+};
 ["END1", true, false, false] call BIS_fnc_endMission;

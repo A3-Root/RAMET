@@ -1,7 +1,7 @@
 /*
  * Author: Root
  * Description: Bulk-export every world in worlds.txt via ocap-renderterrain.
- *              Wraps ocap-exporter/export_data.sqf in an Archangel-driven loop.
+ *              Wraps ocap-exporter/export_data.sqf in a FlatDevil-driven loop.
  *              Requires Arma diagnostic branch (diag_exportTerrainSVG).
  *
  * Public: No
@@ -15,25 +15,37 @@
 if (!isServer) exitWith {};
 
 private _next = {
-    private _r = "archangel" callExtension ["ramet.bulk.next_world", ["ocap"]];
-    _r param [0, "", [""]]
+    private _r = ["ramet.bulk.next_world", ["ocap"]] call ramet_fnc_fdCall;
+    _r params ["_ok", ["_value", []]];
+    if (!_ok) exitWith {
+        // bridge failure ends the queue: an empty world name stops the loop
+        diag_log text format ["[RAMET ocap] ERROR next_world: %1", _r];
+        ""
+    };
+    _value param [0, "", [""]]
 };
 
 private _markDone = {
     params ["_world", "_ok", ["_err", ""]];
-    "archangel" callExtension ["ramet.bulk.mark_done", ["ocap", _world, str _ok, _err]];
+    private _r = ["ramet.bulk.mark_done", ["ocap", _world, _ok, _err]] call ramet_fnc_fdCall;
+    if !(_r select 0) then {
+        diag_log text format ["[RAMET ocap] ERROR mark_done %1: %2", _world, _r];
+    };
 };
 
 private _log = {
     params ["_msg"];
-    "archangel" callExtension ["ramet.bulk.log_progress", [_msg]];
+    ["ramet.bulk.log_progress", [_msg]] call ramet_fnc_fdCall;
     diag_log text format ["[RAMET ocap] %1", _msg];
 };
 
 private _kickDocker = {
     params ["_world"];
-    // fire-and-forget — kickoff returns immediately
-    "archangel" callExtension ["ramet.kickoff.run_docker", [_world]];
+    // fire-and-forget — the python side threads the work and returns immediately
+    private _r = ["ramet.kickoff.run_docker", [_world]] call ramet_fnc_fdCall;
+    if !(_r select 0) then {
+        diag_log text format ["[RAMET ocap] ERROR run_docker %1: %2", _world, _r];
+    };
 };
 
 [format ["bulk ocap export starting (worldName=%1)", worldName]] call _log;

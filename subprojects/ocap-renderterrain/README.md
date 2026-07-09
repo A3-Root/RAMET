@@ -65,7 +65,7 @@ Select maps from the addon UI, or start a bulk export from the debug console:
 [["Stratis", "Altis"]] call ocap_renderterrain_fnc_export;
 ```
 
-The wrapper launches each selected world as a scripted mission and runs the existing OCAP exporter. If `Run Docker render in-game` is checked in the export options, it starts Archangel/Docker processing for that world before moving to the next world. Source output is written under the Arma 3 installation directory:
+The wrapper launches each selected world as a scripted mission and runs the existing OCAP exporter. If `Run Docker render in-game` is checked in the export options, it starts FlatDevil/Docker processing for that world before moving to the next world. Source output is written under the Arma 3 installation directory:
 
 ```text
 ocap_exporter/{worldName}/

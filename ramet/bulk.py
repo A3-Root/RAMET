@@ -3,7 +3,7 @@ tracks completion in <Arma3>/ramet_state/bulk_state.json (schema ramet-bulk-2,
 per-stage cells: grad_meh / ocap / ingame) so each pass can independently
 resume across crashes / Steam branch swaps.
 
-API (called from SQF via Archangel):
+API (called from SQF via FlatDevil):
     next_world(stage)                        -> [str]   next pending world for the named stage
     mark_done(stage, world, ok, err="")      -> [bool]  record per-stage completion
     log_progress(msg)                        -> [bool]  append to ramet_bulk.log
@@ -85,10 +85,11 @@ def next_world(stage: str = "grad_meh"):
         return [w]
 
 
-def mark_done(stage: str, world: str, ok: str = "true", err: str = ""):
+def mark_done(stage: str, world: str, ok: bool | str = True, err: str = ""):
+    done = ok if isinstance(ok, bool) else str(ok).strip().lower() == "true"
     with _LOCK:
         s = _load()
-        _state.mark_done(s, _stage(stage), world, str(ok).lower() == "true", err)
+        _state.mark_done(s, _stage(stage), world, done, err)
         _save(s)
         _append_log(f"mark_done stage={stage} {world} ok={ok} err={err!r}")
         return [True]

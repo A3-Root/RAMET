@@ -60,18 +60,6 @@ uiNamespace setVariable ["ocap_renderterrain_fnc_startMission", {
 					uiNamespace setVariable ["ocap_renderterrain_errors", _errors];
 				};
 
-				private _extensionStatus = {
-					params [["_callResult", ""]];
-					private _text = str _callResult;
-					private _status = "unknown";
-					if (((_text find """status""") >= 0) && {(_text find """queued""") >= 0}) then { _status = "queued"; };
-					if (((_text find """status""") >= 0) && {(_text find """building""") >= 0}) then { _status = "building"; };
-					if (((_text find """status""") >= 0) && {(_text find """running""") >= 0}) then { _status = "running"; };
-					if (((_text find """status""") >= 0) && {(_text find """done""") >= 0}) then { _status = "done"; };
-					if (((_text find """status""") >= 0) && {(_text find """error""") >= 0}) then { _status = "error"; };
-					_status
-				};
-
 				[_currentWorld, "load_world", "running"] call (uiNamespace getVariable "ocap_renderterrain_fnc_updateProgress");
 				[_currentWorld, "load_world", "done"] call (uiNamespace getVariable "ocap_renderterrain_fnc_updateProgress");
 
@@ -84,26 +72,42 @@ uiNamespace setVariable ["ocap_renderterrain_fnc_startMission", {
 				private _processDockerInGame = uiNamespace getVariable ["ocap_renderterrain_processDockerInGame", true];
 				if (_processDockerInGame) then {
 					[_currentWorld, "process_docker", "running"] call (uiNamespace getVariable "ocap_renderterrain_fnc_updateProgress");
-					private _startResult = "archangel" callExtension ["ocap_renderterrain.process_world", [_currentWorld]];
-					private _processStatus = [_startResult] call _extensionStatus;
-					if (_processStatus isEqualTo "error") then {
-						[_currentWorld, "process_docker", "canceled"] call (uiNamespace getVariable "ocap_renderterrain_fnc_updateProgress");
-						[_currentWorld, str _startResult] call _reportError;
-					} else {
-						private _lastStatusResult = _startResult;
-						waitUntil {
-							sleep 5;
-							private _statusResult = "archangel" callExtension ["ocap_renderterrain.get_status", [_currentWorld]];
-							_lastStatusResult = _statusResult;
-							_processStatus = [_statusResult] call _extensionStatus;
-							_processStatus in ["done", "error"]
+
+					// Listen for the python job thread's status pushes before starting
+					// the job, so no transition can be missed. The python side lowercases
+					// job keys, hence the toLower compare.
+					private _cbKey = toLower _currentWorld;
+					missionNamespace setVariable ["ocap_renderterrain_jobResult", nil];
+					private _ehId = addMissionEventHandler ["ExtensionCallback", {
+						params ["_name", "_function", "_data"];
+						if (_name isEqualTo "flatdevil" && {_function isEqualTo "ocap_renderterrain.status"}) then {
+							(parseSimpleArray _data) params [["_world", ""], ["_status", ""], ["_error", ""], ["_output", ""]];
+							if (_status in ["done", "error"]) then {
+								missionNamespace setVariable ["ocap_renderterrain_jobResult", [_world, _status, _error]];
+							};
 						};
-						if (_processStatus isEqualTo "done") then {
+					}];
+
+					private _start = ["ocap_renderterrain.process_world", [_currentWorld]] call ocap_renderterrain_fnc_fdCall;
+					if (_start select 0) then {
+						// Job accepted — wait for the terminal push from the job thread.
+						waitUntil {
+							sleep 1;
+							private _result = missionNamespace getVariable ["ocap_renderterrain_jobResult", []];
+							(_result param [0, ""]) isEqualTo _cbKey && {(_result param [1, ""]) in ["done", "error"]}
+						};
+						removeMissionEventHandler ["ExtensionCallback", _ehId];
+						(missionNamespace getVariable ["ocap_renderterrain_jobResult", []]) params ["", "_status", ["_error", ""]];
+						if (_status isEqualTo "done") then {
 							[_currentWorld, "process_docker", "done"] call (uiNamespace getVariable "ocap_renderterrain_fnc_updateProgress");
 						} else {
 							[_currentWorld, "process_docker", "canceled"] call (uiNamespace getVariable "ocap_renderterrain_fnc_updateProgress");
-							[_currentWorld, str _lastStatusResult] call _reportError;
+							[_currentWorld, _error] call _reportError;
 						};
+					} else {
+						removeMissionEventHandler ["ExtensionCallback", _ehId];
+						[_currentWorld, "process_docker", "canceled"] call (uiNamespace getVariable "ocap_renderterrain_fnc_updateProgress");
+						[_currentWorld, str _start] call _reportError;
 					};
 				} else {
 					[_currentWorld, "process_docker", "canceled"] call (uiNamespace getVariable "ocap_renderterrain_fnc_updateProgress");

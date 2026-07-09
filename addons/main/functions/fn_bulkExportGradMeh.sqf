@@ -1,7 +1,7 @@
 /*
  * Author: Root
  * Description: Bulk-export every world in worlds.txt via grad_meh.
- *              Archangel drives the loop: ramet.bulk.next_world() / mark_done() / log_progress().
+ *              FlatDevil drives the loop: ramet.bulk.next_world() / mark_done() / log_progress().
  *              ramet.stage.move_grad_meh() shifts finished output into RAMET/output/_intermediate/.
  *
  * Public: No
@@ -16,18 +16,27 @@
 if (!isServer) exitWith {};
 
 private _next = {
-    private _r = "archangel" callExtension ["ramet.bulk.next_world", ["grad_meh"]];
-    _r param [0, "", [""]]
+    private _r = ["ramet.bulk.next_world", ["grad_meh"]] call ramet_fnc_fdCall;
+    _r params ["_ok", ["_value", []]];
+    if (!_ok) exitWith {
+        // bridge failure ends the queue: an empty world name stops the loop
+        diag_log text format ["[RAMET grad_meh] ERROR next_world: %1", _r];
+        ""
+    };
+    _value param [0, "", [""]]
 };
 
 private _markDone = {
     params ["_world", "_ok", ["_err", ""]];
-    "archangel" callExtension ["ramet.bulk.mark_done", ["grad_meh", _world, str _ok, _err]];
+    private _r = ["ramet.bulk.mark_done", ["grad_meh", _world, _ok, _err]] call ramet_fnc_fdCall;
+    if !(_r select 0) then {
+        diag_log text format ["[RAMET grad_meh] ERROR mark_done %1: %2", _world, _r];
+    };
 };
 
 private _log = {
     params ["_msg"];
-    "archangel" callExtension ["ramet.bulk.log_progress", [_msg]];
+    ["ramet.bulk.log_progress", [_msg]] call ramet_fnc_fdCall;
     diag_log text format ["[RAMET grad_meh] %1", _msg];
 };
 
@@ -66,10 +75,12 @@ while {true} do {
     };
 };
 
-private _summary = "archangel" callExtension ["ramet.bulk.export_summary", ["grad_meh"]];
-private _total   = _summary param [0, 0, [0]];
-private _skipped = _summary param [1, 0, [0]];
-private _names   = _summary param [2, "", [""]];
+private _r = ["ramet.bulk.export_summary", ["grad_meh"]] call ramet_fnc_fdCall;
+_r params ["_ok", ["_summary", []]];
+if (!_ok) then {
+    diag_log text format ["[RAMET grad_meh] ERROR export_summary: %1", _r];
+};
+_summary params [["_total", 0, [0]], ["_skipped", 0, [0]], ["_names", "", [""]]];
 
 private _summaryMsg = format ["bulk grad_meh export complete — %1 processed, %2 skipped", _total, _skipped];
 [_summaryMsg] call _log;

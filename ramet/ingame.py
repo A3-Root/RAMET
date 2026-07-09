@@ -1,4 +1,4 @@
-"""Archangel-callable helpers driving the GMS (arma3MapExporter) in-game pass.
+"""FlatDevil-callable helpers driving the GMS (arma3MapExporter) in-game pass.
 
 Exposed via SQF:
     ramet.ingame.start(world)        -> kick the a3me_export SQF function

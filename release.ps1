@@ -206,7 +206,7 @@ $stagingRoot = Join-Path $root "releases\_bundle"
 if (Test-Path $stagingRoot) { Remove-Item $stagingRoot -Recurse -Force }
 New-Item -ItemType Directory -Path $stagingRoot | Out-Null
 
-# 1) @root_amet — copy what hemtt produced (already contains $ARCHANGEL$, ramet/, docs/, tools/, batch/)
+# 1) @root_amet — copy what hemtt produced (already contains $FLATDEVIL$, ramet/, docs/, tools/, batch/)
 $ramOut = Join-Path $root ".hemttout\release"
 if (-not (Test-Path $ramOut)) { throw "Expected $ramOut from hemtt release" }
 Copy-Item -Path $ramOut -Destination (Join-Path $stagingRoot "@root_amet") -Recurse

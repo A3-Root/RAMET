@@ -11,7 +11,7 @@ git_hash = 0
 include = [
     "mod.cpp",
     "README.md",
-    "license.md"
+    "LICENSE"
 ]
 exclude = [
     ".gitignore",
