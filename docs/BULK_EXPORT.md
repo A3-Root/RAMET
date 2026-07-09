@@ -1,100 +1,201 @@
 # RAMET bulk-export runbook
 
+RAMET has two supported export paths:
+
+- Automatic batch export, driven by `batch\worlds.txt`
+- Interactive export, driven by the main-menu spotlight tiles
+
+The automatic path is best for repeatable queues. The interactive path is best
+when the operator wants to pick maps manually in the in-game UI.
+
+## Recommended workflow
+
+This is the default path:
+
+1. Export maps from the spotlight UI for the process you want.
+2. Run `batch\03_postprocess.bat` or `batch/03_postprocess.sh`.
+3. Run `batch\04_deploy.bat` / `batch/04_deploy.sh` or
+   `batch\05_zip_for_upload.bat` / `batch/05_zip_for_upload.sh` as needed.
+
+The shell wrappers are thin launchers that delegate to the matching `.bat`
+files through `cmd.exe`. They are useful from WSL or Git Bash on Windows.
+
 ## Prereqs
 
-- Arma 3 main + diagnostic branches both installed (Steam → Properties → Betas).
-- Mods present in Arma3 root: `@root_amet`, `@CBA_A3`.
-  After `.\release.ps1` (or `hemtt release` from RAMET root), unzip `releases\root_amet-{ver}.zip` directly into the Arma 3 root — `@root_amet` contains every addon (including the vendored Intercept and grad_meh/ocap_renderterrain, all absorbed into one mod), `batch\`, `tools\`, and the Docker context.
-- Docker Desktop running — **only host dependency for post-processing**. All tippecanoe / pmtiles / cwebp / pngquant / oxipng / Python / lxml work runs inside the `ramet-postprocess` image (built once from `tools\Dockerfile`).
+- Arma 3 main and/or diagnostic branches installed through Steam betas.
+- `@root_amet` and `@CBA_A3` present in the Arma 3 root.
+- `flatdevil_x64.dll` present in the Arma 3 root for the batch UI.
+- Docker Desktop running.
+- Host Python 3.10+ on `PATH` for deployment and zip packaging.
 
-## 1. Prep
+After `release.ps1` or `release.sh`, unzip `releases\root_amet-{ver}.zip`
+into the Arma 3 root. `@root_amet` contains the addons, `batch\`, `tools\`,
+`docs\`, and the bundled native DLLs when they were built or already present in
+the tree.
 
-Edit `@root_amet\batch\worlds.txt` — one CfgWorlds class name per line. Comments with `#`. The same file is consumed by both Arma passes, read directly from the mod folder (nothing is dropped into the Arma 3 root).
+## 1. Choose a queue source
 
-## In-game UI overview
+### Automatic batch queue
 
-Two pickers appear once `@root_amet` is loaded:
+Edit `@root_amet\batch\worlds.txt` if you want to pre-seed a batch queue. The
+file may be empty. Put one `CfgWorlds` class name per line and use `#` for
+comments.
 
-- **Main-menu picker** (auto on launch + "RAMET — Bulk Export" spotlight tile). RAMET shows a single two-option prompt (`Grad_meh` / `OCAP`); the choice opens the corresponding interactive single-map exporter. The grad_meh/in-game spotlight tiles show only on the stable binary; the OCAP tile shows only on the diagnostic binary (auto-detected — see "Diag detection" below).
-- **In-mission picker** (`Ctrl+Shift+R`, also auto-opens once after player init). Triggers the FlatDevil-driven worlds.txt bulk loop — `ramet_fnc_bulkExportGradMeh` or `ramet_fnc_bulkExportOcap`.
+The batch scripts read this file directly from the mod folder.
 
-Use the main-menu picker for one-off interactive exports; use the in-mission picker for fully automated bulk runs across the worlds.txt queue.
+### Interactive spotlight
 
-## 2. grad_meh export (main branch)
+If you do not want to pre-seed the queue, launch Arma and use the main-menu
+spotlight tiles:
 
-```
+- `RAMET — Grad_meh export`
+- `RAMET — OCAP export (diag)`
+- `RAMET — In-Game export (GMS)`
+
+Those tiles open the respective picker UIs. Grad_meh and GMS are main-branch
+paths. OCAP requires the diagnostic branch.
+
+## 2. Optional batch export
+
+### 2a. grad_meh
+
+Run this on the Arma 3 main branch:
+
+```bat
 batch\01_export_grad_meh.bat
 ```
 
-Switches into Arma 3 root, verifies `arma3_64.exe`, deletes any stale `ramet_state/bulk_state.json`, launches Arma. Inside the game, `ramet_fnc_bulkExportGradMeh` runs immediately and loops through the world list, calling `gradMehExportMap [w, true, true, true, true, true, true, true]` once per world and polling `gradMehExportRunning` until done. After each world, `ramet.stage.move_grad_meh()` shifts `Arma3/grad_meh/{w}/` into `Arma3/ramet_intermediate/grad_meh/{w}/`.
+Shell equivalent:
 
-You must launch Arma with one of the listed worlds. The loop iterates the rest by reloading the appropriate world; if a queued world differs from the loaded one, the loop logs a warning and skips it — you'll see that in `ramet_state/ramet_bulk.log`.
-
-When the queue is exhausted, the mission ends with `endMission "END1"`. Close Arma.
-
-## 3. Branch swap
-
-Steam → Arma 3 → Properties → Betas → choose **`development`** (diagnostic) and let Steam re-validate. The diag binary is `arma3diag_x64.exe`.
-
-## 4. ocap-renderterrain export (diag branch)
-
+```bash
+batch/01_export_grad_meh.sh
 ```
+
+This starts the Grad_meh bulk loop and exports each queued world into
+`Arma3\grad_meh\{world}\`.
+
+Notes:
+
+- The script resets `ramet_state\bulk_state.json` before launch so the queue
+  starts clean.
+- Any world mismatch is logged and skipped, not retried forever.
+- The pass finishes when `ramet_state\ramet_bulk.log` reports completion.
+
+### 2b. ocap-renderterrain
+
+Switch Arma 3 to the diagnostic/development branch and run:
+
+```bat
 batch\02_export_ocap.bat
 ```
 
-Same loop pattern, this time calling `ocap_renderterrain_fnc_exportCurrentWorld` (vendored into `@root_amet`) and waiting on `ocap_exporter_done`. Requires the diagnostic binary — checked via `ramet_fnc_isDiagBuild`, not the unreliable `isNil "diag_exportTerrainSVG"` (that command name isn't a variable, so the naive check was always true).
+Shell equivalent:
 
-After each world, `ramet.stage.move_ocap()` shifts `Arma3/ocap_exporter/{w}/` into `ramet_intermediate/ocap_rt/{w}/`. If you toggle the "kickoff Docker render" option in-game (`ramet.kickoff.run_docker(world)`), the Docker render of that world starts in a background process while Arma continues to the next world.
-
-## 5. Post-process (no Arma — all Docker)
-
+```bash
+batch/02_export_ocap.sh
 ```
+
+This exports raw SVG / ASC data into `Arma3\ocap_exporter\{world}\`.
+
+Notes:
+
+- SVG export requires the diagnostic executable.
+- This pass is resumable because it keeps its own bulk state.
+
+## 3. Post-process
+
+Run the Docker-based merge and verification step:
+
+```bat
 batch\03_postprocess.bat
 ```
 
-1. Runs `ocap_renderterrain_process.bat` (upstream image) over `<Arma3>\ocap_exporter\` → writes `<Arma3>\ocap_renderterrain_output\{world}\`.
-2. Builds the `ramet-postprocess` image from `tools\Dockerfile` (cached after first build).
-3. Runs `docker run --rm -v <Arma3>:/work ramet-postprocess:latest --all`. Per world: merge raster pyramids, build PMTiles from grad_meh GeoJSONs, slice the ocap-rt SVG into per-class layers, optimize tiles (WebP/pngquant/oxipng), write `map.json` + `source.json`, verify. Output lands at `<Arma3>\ramet_output\{world}\`.
-4. Bails on any verify error before deploying.
+Shell equivalent:
 
-Re-runnable: orchestrate is idempotent per world. To redo just one:
-```
-docker run --rm -v <Arma3>:/work -e RAMET_ARMA_ROOT=/work ramet-postprocess:latest --world altis
+```bash
+batch/03_postprocess.sh
 ```
 
-## 6. Deploy
+What it does:
 
-### 6a. Local planner (same machine)
+1. Optionally runs the upstream `ocap_renderterrain_process.bat` to render
+   `ocap_renderterrain_output\{world}\`.
+2. Builds the `ramet-postprocess` image from `tools\Dockerfile`.
+3. Runs `tools/orchestrate.py` inside Docker to merge outputs, build PMTiles,
+   slice SVG layers, render ingame pyramids, optimize tiles, and verify.
+4. Writes the final world tree to `Arma3\ramet_output\{world}\`.
 
-```
+Useful flag:
+
+- `--skip-ocap` skips the upstream ocap render if those outputs already exist.
+
+If `batch\render_worlds.txt` exists, it limits the Docker render / merge to the
+listed worlds.
+
+## 4. Deploy
+
+Local planner on the same machine:
+
+```bat
 batch\04_deploy.bat
 ```
 
-Copies `<Arma3>\ramet_output\{world}\` into `JSOC-OPS-Warlords\server\warlords\map_tiles\{world}\`. Add `--prune-legacy` to wipe planner-side maps that lack a RAMET `map.json` (verify first with `--dry-run`).
+Shell equivalent:
 
-### 6b. Remote planner (SFTP)
-
-```
-batch\05_zip_for_upload.bat                       :: per-world zips
-batch\05_zip_for_upload.bat --bundle              :: single bundle zip
-batch\05_zip_for_upload.bat --world altis         :: specific world(s)
+```bash
+batch/04_deploy.sh
 ```
 
-Writes to `<Arma3>\ramet_output\_zips\`. SFTP/SCP those zips to the planner host and extract under `server/warlords/map_tiles/` — each zip contains a top-level `{world}/` dir.
+Remote planner upload:
 
-## Partial-output handling
+```bat
+batch\05_zip_for_upload.bat
+batch\05_zip_for_upload.bat --bundle
+```
 
-- If a map fails the grad_meh pass (encrypted ebo / unsupported), step 1 logs the failure to `ramet_state/ramet_bulk.log`; step 5 emits a manifest with `"source": "ocap"` and no `vectorSource`. Planner hides the vector overlay toggles for that map.
-- Same in reverse if a map only has grad_meh output.
-- Manifest declares only what was produced; the planner renders only what's declared. No client-side fallback logic.
+Shell equivalents:
 
-## Diag detection
+```bash
+batch/05_zip_for_upload.sh
+batch/05_zip_for_upload.sh --bundle
+```
 
-`ramet_fnc_isDiagBuild` (cached in `uiNamespace getVariable "ramet_isDiagBuild"`, computed once in `XEH_preStart.sqf`) probes `supportInfo "u:diag_exportTerrainSVG*"` and `productVersion select 1 == "Arma3Diag"`. Spotlight tile conditions and the vendored Intercept boot sequence both read this cached flag — Intercept's host init is skipped entirely on the diag binary (its DLL previously crashed there scanning engine memory signatures that don't match the diag exe).
+`04_deploy.bat` copies the world trees into
+the chosen planner `map_tiles\{world}\` directory. `05_zip_for_upload.bat`
+writes per-world zips under `Arma3\ramet_output\_zips\`.
+
+## Interactive spotlight flow
+
+The spotlight tiles open the upstream UIs and let the operator choose maps in
+the dialog itself.
+
+- Grad_meh spotlight: main branch
+- OCAP spotlight: diagnostic branch
+- In-Game spotlight: main branch
+
+The ingame picker populates its grid from `CfgWorldList`, remembers selection
+state while the dialog is open, and launches the export when the dialog closes
+with a selection. The OCAP and Grad_meh pickers follow the same manual-select
+pattern.
+
+## Partial output
+
+- A world can be published with only Grad_meh output, only OCAP output, only
+  in-game output, or any combination.
+- The manifest only advertises layers that actually exist on disk.
+- Missing `vectorSource` or `svgLayers` is valid and intentional when those
+  stages were not produced.
+- `source.json` keeps provenance for the source directories, which the verifier
+  uses to sanity-check the sat source.
 
 ## Troubleshooting
 
-- "world mismatch" in `ramet_bulk.log` → the loop tried to process world X but Arma loaded world Y. Re-launch Arma with that world (or accept the skip; remaining worlds still process).
-- `diag_exportTerrainSVG` missing → you're on main branch, not diag. Steam beta selection.
-- Docker build OOM (ocap-rt render) → set `OCAP_RENDER_DOCKER_MEMORY=24g` (default 48g) before running step 3.
-- "tippecanoe not found" inside orchestrate → the `ramet-postprocess` image is stale. Rebuild: `docker build --no-cache -t ramet-postprocess:latest -f tools\Dockerfile .` from RAMET root, or rerun `03_postprocess.bat`.
+- `diag_exportTerrainSVG` missing means you are not on the diagnostic branch.
+- `03_postprocess.bat --skip-ocap` is useful when only the later merge /
+  optimize / deploy stages need to be rerun.
+- If `ramet-postprocess` complains about missing tools, rebuild the image from
+  the repo root.
+- If deployment skips a world, confirm that `ramet_output\{world}\map.json`
+  exists.
+- If a shell wrapper says `cmd.exe` is missing, run the matching `.bat` file
+  from Windows instead.

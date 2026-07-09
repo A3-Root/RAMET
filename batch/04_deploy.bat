@@ -1,7 +1,7 @@
 @echo off
 setlocal EnableExtensions
 
-rem RAMET step 4 — copy <Arma3>\ramet_output\ into JSOC-OPS-Warlords\server\warlords\map_tiles\.
+rem RAMET step 4 — copy <Arma3>\ramet_output\ into a user-supplied planner map_tiles\ directory.
 rem Host Python only (deploy_to_planner.py is stdlib-only — no Docker needed).
 
 set "SCRIPT_DIR=%~dp0"
@@ -16,12 +16,9 @@ where python >nul 2>nul || (
     popd & exit /b 1
 )
 
-set "JSOC_ROOT=G:\Games\Arma 3\# Git\JSOC-OPS-Warlords"
-set "PLANNER_DEFAULT=%JSOC_ROOT%\server\warlords\map_tiles"
-
 echo === deploy via host Python ===
 set "RAMET_ARMA_ROOT=%ARMA_ROOT%"
-python "%RAMET_ROOT%\tools\deploy_to_planner.py" --planner-root "%PLANNER_DEFAULT%" %*
+python "%RAMET_ROOT%\tools\deploy_to_planner.py" %*
 set "RC=%ERRORLEVEL%"
 
 popd

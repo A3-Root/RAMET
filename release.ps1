@@ -10,6 +10,8 @@ param(
     [switch]$SkipSubprojects,
     [switch]$Clean,
     [switch]$RebuildGradMehDll,
+    [switch]$NoClean,
+    [switch]$NoRebuildGradMehDll,
     [string]$VsDevCmd = $env:RAMET_VSDEVCMD,
     [string]$VcVarsVer = "14.44.35207"
 )
@@ -17,6 +19,12 @@ param(
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $root
+
+$Clean = -not $NoClean
+if ($PSBoundParameters.ContainsKey("Clean")) { $Clean = $true }
+
+$RebuildGradMehDll = -not $NoRebuildGradMehDll
+if ($PSBoundParameters.ContainsKey("RebuildGradMehDll")) { $RebuildGradMehDll = $true }
 
 $CheckArgs = @("check", "-p", "-Lc14", "-e")
 
@@ -61,6 +69,18 @@ function Test-CommandPresent {
     return $false
 }
 
+function Test-RequiredPath {
+    param(
+        [string]$Path,
+        [string]$Description,
+        [System.Collections.Generic.List[string]]$Issues
+    )
+
+    if (-not (Test-Path $Path)) {
+        $Issues.Add("$Description is missing at '$Path'.")
+    }
+}
+
 function Find-GradMehDll {
     param([string]$Repo)
     $dll = Join-Path $Repo "build\lib64\grad_meh_x64.dll"
@@ -83,38 +103,97 @@ function Write-PreflightReport {
     $issues = New-Object System.Collections.Generic.List[string]
     $notes = New-Object System.Collections.Generic.List[string]
 
-    if (-not (Test-CommandPresent -Name "hemtt")) { $issues.Add("hemtt is not on PATH.") }
+    foreach ($cmd in @("hemtt", "docker", "git", "bash", "python")) {
+        if (-not (Test-CommandPresent -Name $cmd)) {
+            $issues.Add("Required command '$cmd' is not on PATH.")
+        }
+    }
 
-    if (-not $ResolvedVsDevCmd) {
+    if ($SkipSubprojects) {
+        if ($ResolvedVsDevCmd) {
+            $notes.Add("Using VsDevCmd.bat at '$ResolvedVsDevCmd'.")
+        } else {
+            $notes.Add("VsDevCmd.bat not found; native rebuilds are being skipped.")
+        }
+    } elseif (-not $ResolvedVsDevCmd) {
         $issues.Add("VsDevCmd.bat was not found. Set RAMET_VSDEVCMD or pass -VsDevCmd.")
     } else {
         $notes.Add("Using VsDevCmd.bat at '$ResolvedVsDevCmd'.")
     }
 
-    $vsInstaller = "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe"
-    if (-not (Test-Path $vsInstaller)) {
-        $notes.Add("vswhere.exe was not found at '$vsInstaller'; .NET AOT linking may fail if the Visual Studio Installer is absent.")
+    & docker info | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        $issues.Add("Docker is on PATH but the daemon is not reachable. Start Docker Desktop and retry.")
     }
 
-    $gradRepo = Join-Path $root "subprojects\grad_meh"
-    $a3meRepo = Join-Path $root "subprojects\arma3MapExporter"
+    $requiredPaths = @(
+        @(".hemtt\project.toml", ".hemtt project"),
+        @(".hemtt\hooks\post_build\01_bundle_pipeline.rhai", "post_build bundle hook"),
+        @("tools\Dockerfile", "Dockerfile"),
+        @("tools\requirements.txt", "Python requirements"),
+        @("tools\deploy_to_planner.py", "planner deploy helper"),
+        @("tools\orchestrate.py", "post-process orchestrator"),
+        @("batch\01_export_grad_meh.bat", "grad_meh batch wrapper"),
+        @("batch\02_export_ocap.bat", "ocap batch wrapper"),
+        @("batch\03_postprocess.bat", "post-process batch wrapper"),
+        @("batch\04_deploy.bat", "deploy batch wrapper"),
+        @("batch\05_zip_for_upload.bat", "zip batch wrapper"),
+        @("batch\build_grad_meh.bat", "grad_meh build helper"),
+        @("batch\worlds.txt", "world queue file"),
+        @("batch\render_worlds.txt", "render filter file"),
+        @("ramet", "ramet Python package"),
+        @('modules\$FLATDEVIL$', "FlatDevil marker"),
+        @("modules\ocap_renderterrain", "ocap_renderterrain Python package"),
+        @("addons\main", "main addon"),
+        @("addons\grad_meh_main", "grad_meh main addon"),
+        @("addons\grad_meh_ui", "grad_meh UI addon"),
+        @("addons\ocap_exporter", "ocap exporter addon"),
+        @("addons\ocap_ui", "ocap UI addon"),
+        @("addons\a3me_main", "arma3MapExporter main addon"),
+        @("addons\a3me_exporter", "arma3MapExporter exporter addon"),
+        @("addons\intercept_core", "intercept core addon"),
+        @("vendor\intercept\intercept_x64.dll", "vendored intercept DLL"),
+        @("subprojects\grad_meh\CMakePresets.json", "grad_meh CMake presets"),
+        @("subprojects\grad_meh\conanfile.py", "grad_meh Conan recipe"),
+        @("subprojects\grad_meh\ci-conan-profile", "grad_meh Conan profile"),
+        @("subprojects\grad_meh\conan.lock", "grad_meh Conan lockfile"),
+        @("subprojects\arma3MapExporter\MapExportExtension\MapExportExtension.csproj", "arma3MapExporter project"),
+        @("subprojects\ocap-renderterrain\ocap-exporter\go.mod", "ocap exporter module"),
+        @("subprojects\ocap-renderterrain\ocap-renderterrain\Dockerfile", "ocap render Dockerfile"),
+        @("subprojects\ocap-renderterrain\ocap_renderterrain_process.bat", "ocap render launcher")
+    )
 
-    $gradDll = Find-GradMehDll -Repo $gradRepo
-    $a3meDll = Find-A3meDll -Repo $a3meRepo
-
-    if (-not (Test-Path (Join-Path $root ".hemtt\project.toml"))) {
-        $issues.Add(".hemtt\\project.toml is missing at the repository root.")
+    foreach ($entry in $requiredPaths) {
+        Test-RequiredPath -Path (Join-Path $root $entry[0]) -Description $entry[1] -Issues $issues
     }
 
     if ($SkipSubprojects) {
-        if (-not $gradDll) { $issues.Add("subprojects\\grad_meh\\build\\lib64\\grad_meh_x64.dll is missing, but -SkipSubprojects was set.") }
-        if (-not $a3meDll) { $issues.Add("subprojects\\arma3MapExporter\\publish\\MapExportExtension_x64.dll is missing, but -SkipSubprojects was set.") }
+        $notes.Add("Skipping native DLL rebuilds by request.")
+        foreach ($cmd in @("cmake", "conan", "ninja", "cargo", "dotnet")) {
+            if (-not (Test-CommandPresent -Name $cmd)) {
+                $notes.Add("Required command '$cmd' is missing, but native rebuilds are skipped.")
+            }
+        }
     } else {
-        if (-not $gradDll -or $RebuildGradMehDll) {
-            if (-not (Test-CommandPresent -Name "conan")) { $issues.Add("conan is required to build grad_meh_x64.dll.") }
-            if (-not (Test-CommandPresent -Name "cmake")) { $issues.Add("cmake is required to build grad_meh_x64.dll.") }
-            if (-not (Test-CommandPresent -Name "ninja")) { $issues.Add("ninja is required to build grad_meh_x64.dll.") }
-            if (-not (Test-CommandPresent -Name "cargo")) { $issues.Add("cargo is required to build grad_meh_x64.dll.") }
+        $gradRepo = Join-Path $root "subprojects\grad_meh"
+        $a3meRepo = Join-Path $root "subprojects\arma3MapExporter"
+
+        $gradDll = Find-GradMehDll -Repo $gradRepo
+        $a3meDll = Find-A3meDll -Repo $a3meRepo
+
+        if (-not $gradDll) {
+            $notes.Add("grad_meh_x64.dll is missing and will be rebuilt from source.")
+        }
+        if (-not $a3meDll) {
+            $notes.Add("MapExportExtension_x64.dll is missing and will be rebuilt from source.")
+        }
+
+        if ($RebuildGradMehDll -or -not $gradDll) {
+            foreach ($cmd in @("conan", "cmake", "ninja", "cargo")) {
+                if (-not (Test-CommandPresent -Name $cmd)) {
+                    $issues.Add("Required command '$cmd' is missing for grad_meh_x64.dll.")
+                }
+            }
         }
 
         if (-not (Test-CommandPresent -Name "dotnet")) { $issues.Add("dotnet SDK is required to build @arma3MapExporter.") }
@@ -145,9 +224,11 @@ $VsDevCmd = Resolve-VsDevCmd -PreferredPath $VsDevCmd
 Write-PreflightReport -ResolvedVsDevCmd $VsDevCmd
 
 if ($Clean) {
-    Get-ChildItem -Path `
-        "subprojects\arma3MapExporter\publish", `
-        ".hemttout", "releases" -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force
+    $cleanPaths = @(".hemttout", "releases")
+    if (-not $SkipSubprojects) {
+        $cleanPaths += "subprojects\arma3MapExporter\publish"
+    }
+    Get-ChildItem -Path $cleanPaths -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force
 }
 
 function Build-GradMehDll {

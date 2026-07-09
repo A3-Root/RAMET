@@ -1,88 +1,141 @@
-# RAMET `map.json` — schema v `ramet-1`
+# RAMET `map.json` schema
 
-`output/{world}/map.json` is the unified manifest the planner consumes. Old
-OCAP-style fields are **not** preserved — the planner code is rewritten to
-read this schema directly.
+`ramet_output/{world}/map.json` is written in two stages:
+
+- `tools/merge_outputs.py` creates the base manifest from the available source
+  directories.
+- `tools/orchestrate.py` adds rendered layers, final zoom bounds, and the final
+  raster metadata before writing the file.
+
+`source.json` sits next to it and records where the merged output came from.
+For `tools/orchestrate.py --from-reference`, the same schema is written under
+`output/{world}/` instead.
 
 ## Top-level keys
 
-| Key            | Type         | Notes                                                                 |
-| -------------- | ------------ | --------------------------------------------------------------------- |
-| `schemaVersion`| `string`     | Always `"ramet-1"` for this generation.                               |
-| `worldName`    | `string`     | CfgWorlds class (lowercase).                                          |
-| `displayName`  | `string`     | Human label. Falls back to `worldName.title()`.                       |
-| `worldSize`    | `number`     | Arma world dimension (m). From grad_meh `meta.json`.                  |
-| `imageSize`    | `number`     | Pixel size of full-zoom raster. Used by planner's coord transform.    |
-| `multiplier`   | `number`     | `imageSize / worldSize` — already in planner's `armaToLatLng`.        |
-| `cellSize`     | `number`     | DEM cell size (m). 7.5 for most maps.                                 |
-| `latitude`     | `number`     | Geographic lat (only for tooltip / attribution).                      |
-| `longitude`    | `number`     | Geographic lon.                                                       |
-| `attribution`  | `string`     | "Bohemia Interactive".                                                |
-| `minZoom`      | `int`        | Lowest tile zoom level present.                                       |
-| `maxZoom`      | `int`        | Highest tile zoom level present.                                      |
-| `source`       | `string`     | `"grad_meh"`, `"ocap"`, or `"grad_meh+ocap"`.                          |
-| `rasterLayers` | `array`      | See **rasterLayers** below.                                           |
-| `vectorSource` | `object?`    | Omitted when no PMTiles was produced.                                 |
-| `svgLayers`    | `array?`     | Omitted when no SVG slicing happened.                                 |
-| `dem`          | `object?`    | `{ asc: "dem/dem.asc.gz", cellSize }`.                                |
-| `preview`      | `string?`    | Relative path to preview PNG.                                         |
+| Key            | Type      | Notes |
+| -------------- | --------- | ----- |
+| `schemaVersion`| `string`   | Always `"ramet-1"`. |
+| `worldName`    | `string`   | Lowercase `CfgWorlds` class name. |
+| `displayName`  | `string`   | Human label. Falls back to `world.title()`. |
+| `worldSize`    | `number`   | World size in meters. |
+| `imageSize`    | `number`   | Final canonical raster size in pixels. `orchestrate.py` recomputes this from the final `maxZoom`. |
+| `multiplier`   | `number`   | `imageSize / worldSize`. Used by the planner coordinate transform. |
+| `cellSize`     | `number?`  | DEM cell size in meters. |
+| `latitude`     | `number?`  | Anchor latitude. |
+| `longitude`    | `number?`  | Anchor longitude. |
+| `attribution`  | `string`   | Currently `"Bohemia Interactive"`. |
+| `minZoom`      | `number`   | Lowest raster zoom present after verification. |
+| `maxZoom`      | `number`   | Highest raster zoom present after verification. |
+| `source`       | `string`   | Input family summary such as `grad_meh`, `ocap`, or `ocap+grad_meh` in detection order. This is a merge summary, not a full provenance record. |
+| `rasterLayers` | `array`    | Ordered list of base-layer variants. |
+| `vectorSource` | `object?`  | Present when PMTiles was built. |
+| `svgLayers`    | `array?`   | Present when SVG slicing succeeded. |
+| `dem`          | `object?`  | Present when a DEM exists. |
+| `preview`      | `string?`  | Relative preview PNG path, or `null` when absent. |
 
-## rasterLayers[]
+## `rasterLayers[]`
 
-```jsonc
-{
-  "id":      "sat",                    // unique within manifest
-  "path":    "tiles/sat/{z}/{x}/{y}.webp",
-  "label":   "Satellite",              // user-facing
-  "category":"base",                   // currently only "base"
-  "ext":     "webp"                    // "png" | "webp"
-}
-```
+Each raster layer object has:
 
-Known raster layer ids: `sat`, `sat_dark`, `baked_sat`, `baked_sat_dark`, `topo`,
-`topo_dark`, `baked_topo`, `baked_topo_dark`, `ingame` (in-game topographic), and
-`ingame_aerial` (in-game orthographic "satellite" imagery, cherry-picked from GMS v2.2.0).
-`ingame_aerial` is only present when the in-game export produced `aerial.png`.
+| Key | Type | Notes |
+| --- | --- | --- |
+| `id` | `string` | Stable layer identifier used by the planner and tile route. |
+| `path` | `string` | Relative tile path template, e.g. `tiles/topo/{z}/{x}/{y}.png`. |
+| `label` | `string` | User-facing name. |
+| `category` | `string` | Currently `base` for raster layers. |
+| `ext` | `string` | `png` or `webp`. |
+| `minZoom` | `number` | Lowest zoom level actually present on disk. |
+| `maxZoom` | `number` | Highest zoom level actually present on disk. |
 
-## vectorSource
+Current layer ids can include:
+
+- `sat`
+- `sat_dark`
+- `baked_sat`
+- `baked_sat_dark`
+- `topo`
+- `topo_dark`
+- `baked_topo`
+- `baked_topo_dark`
+- `ingame`
+- `ingame_aerial`
+- `topoRelief`
+- `colorRelief`
+
+The exact set depends on which source families were present for that world. In
+particular, `topoDark` from the ocap renderer is normalized to `topo_dark`, and
+the imported ocap raster variants keep their camelCase ids (`topoRelief`,
+`colorRelief`).
+
+## `vectorSource`
 
 ```jsonc
 {
   "type": "pmtiles",
-  "url":  "vector/features.pmtiles",
+  "url": "vector/features.pmtiles",
   "layers": [
     { "id": "road_main", "label": "Main Roads", "category": "transport", "default": true },
-    { "id": "road",      "label": "Roads",      "category": "transport", "default": true  },
-    { "id": "house",     "label": "Buildings",  "category": "structure", "default": false }
+    { "id": "road", "label": "Roads", "category": "transport", "default": true },
+    { "id": "house", "label": "Buildings", "category": "structure", "default": false }
   ]
 }
 ```
 
-Layer ids map 1:1 to grad_meh GeoJSON file stems (`road_main.geojson` →
-`road_main`). `category` is one of `transport | structure | terrain | labels | other`
-and drives the planner's grouped overlay panel. `default: true` means the
-layer is enabled on first paint.
+Notes:
 
-`features.pmtiles` is served via HTTP Range requests; the planner uses the
-`pmtiles` JS lib + `protomaps-leaflet` to render it client-side.
+- `url` is relative to `ramet_output/{world}/`.
+- Layer ids map to the grad_meh GeoJSON stems.
+- `category` is one of `transport`, `structure`, `terrain`, `labels`, or
+  `other`.
+- `default: true` means the layer starts enabled.
 
-## svgLayers[]
+The planner serves the bundle with HTTP range support and renders it through
+`pmtiles` + `protomaps-leaflet`.
+
+## `svgLayers[]`
 
 ```jsonc
 { "id": "roads_svg", "path": "svg/layers/roads.svg.gz", "label": "Roads (SVG HQ)" }
 ```
 
-Gzipped. Served with `Content-Encoding: gzip`.
+Each entry points at a gzipped SVG file and is served with
+`Content-Encoding: gzip`.
 
-## Provenance — `source.json`
+## `dem`
 
-Companion file:
+```jsonc
+{ "asc": "dem/dem.asc.gz", "cellSize": 7.5 }
+```
+
+`dem.asc.gz` is optional, but when present the planner can use it for terrain or
+debug tooling.
+
+## `source.json`
+
+Companion provenance file:
 
 ```jsonc
 {
   "generatedAt": "2026-05-24T13:22:00Z",
-  "grad_meh":    "/path/to/_intermediate/grad_meh/altis",
-  "ocap_rt":     "/path/to/_intermediate/ocap_rt/altis",
-  "tool":        "ramet.orchestrate"
+  "grad_meh": "/path/to/grad_meh/altis",
+  "ocap_raw": "/path/to/ocap_exporter/altis",
+  "ocap_rendered": "/path/to/ocap_renderterrain_output/altis",
+  "tool": "ramet.orchestrate"
 }
 ```
+
+`grad_meh`, `ocap_raw`, and `ocap_rendered` may be `null` when the
+corresponding source family was not used. `generatedAt` and `tool` are always
+set. The current schema does not store a separate `ingame` provenance path.
+
+## Practical notes
+
+- `vectorSource` and `svgLayers` are omitted entirely when those stages do not
+  run.
+- `imageSize` and `multiplier` are recomputed from the final raster pyramid, so
+  they reflect the actual output on disk.
+- `preview` is written as `null` when no preview PNG exists.
+- In in-game-only post-process runs, `tools/orchestrate.py` preserves the
+  existing manifest and layers the GMS raster on top rather than rebuilding the
+  manifest from scratch.

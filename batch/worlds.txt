@@ -4,5 +4,4 @@
 # altis
 # stratis
 # tanoa
-# vt7
 # enoch

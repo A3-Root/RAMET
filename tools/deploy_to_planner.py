@@ -1,4 +1,4 @@
-"""Deliver RAMET output to the planner.
+"""Deliver RAMET output to a user-supplied deployment target.
 
 Two modes:
   --local    copy <ramet_output>/{world}/ into <planner>/map_tiles/{world}/  (default)
@@ -13,6 +13,7 @@ import argparse
 import json
 import os
 import shutil
+import sys
 import zipfile
 from pathlib import Path
 
@@ -21,7 +22,6 @@ DEFAULT_OUTPUT = Path(os.environ.get(
     "RAMET_OUTPUT",
     str(Path(os.environ.get("RAMET_ARMA_ROOT", os.getcwd())) / "ramet_output"),
 ))
-DEFAULT_PLANNER = Path(__file__).resolve().parent.parent.parent / "JSOC-OPS-Warlords" / "server" / "warlords" / "map_tiles"
 
 
 def _list_worlds(output_dir: Path) -> list[str]:
@@ -117,7 +117,7 @@ def main() -> int:
     ap.add_argument("--dry-run", action="store_true")
     # local mode
     ap.add_argument("--local", action="store_true", help="copy into a local planner repo (default mode)")
-    ap.add_argument("--planner-root", default=str(DEFAULT_PLANNER), help="planner map_tiles/ dir (--local)")
+    ap.add_argument("--planner-root", help="planner map_tiles/ dir (--local); required unless RAMET_PLANNER_ROOT is set")
     ap.add_argument("--prune-legacy", action="store_true", help="(--local) delete planner-side maps absent from output")
     # zip mode
     ap.add_argument("--zip", action="store_true", help="produce zip(s) under <Arma3>/ramet_output/_zips/ for SFTP upload")
@@ -132,7 +132,11 @@ def main() -> int:
         summary = deploy_zip(output_dir, zip_dir, worlds=args.world,
                              bundle=args.bundle, dry_run=args.dry_run)
     else:
-        summary = deploy_local(output_dir, Path(args.planner_root), worlds=args.world,
+        planner_root = args.planner_root or os.environ.get("RAMET_PLANNER_ROOT")
+        if not planner_root:
+            print("ERR: --planner-root is required for local deploy (or set RAMET_PLANNER_ROOT)", file=sys.stderr)
+            return 2
+        summary = deploy_local(output_dir, Path(planner_root), worlds=args.world,
                                prune_legacy=args.prune_legacy, dry_run=args.dry_run)
 
     print(json.dumps(summary, indent=2))
