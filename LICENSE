@@ -1,0 +1,50 @@
+The combined project is distributed under the GNU General Public License v3 (or any later version).
+
+===============================================================================
+PROJECT LICENSE (GNU General Public License v3)
+===============================================================================
+Copyright (C) 2026 A3-Root (aka xMidnightSnowx) (xmidnightsnowx@pm.me)
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program. If not, see <http://www.gnu.org/licenses/>.
+
+===============================================================================
+ORIGINAL COMPONENTS & THIRD-PARTY NOTICES
+===============================================================================
+
+1. MODIFIED GPLv3 COMPONENTS
+-----------------------------
+Portions of this software are modified from the OCAP project by Jamie Goodson.
+Original Notice:
+Copyright (C) 2016 Jamie Goodson (aka MisterGoodson) (goodsonjamie@yahoo.co.uk)
+
+References to "this program" include all files, folders, and subfolders
+bundled with this license file.
+
+2. OCAP MIT-LICENSED SUB-MODULES
+-----------------------------
+The following sub-modules from the original OCAP project were originally licensed 
+under the MIT License by their respective authors. They have been modified to 
+work within this environment and are included under GPLv3 compatibility terms:
+
+- addon (Copyright (C) 2016 Jamie Goodson (aka MisterGoodson) (goodsonjamie@yahoo.co.uk))
+- extension (Copyright (C) 2021 OCAP2 Contributors)
+- web (Copyright (C) 2021 OCAP2 Contributors)
+
+3. STANDALONE MIT LICENSED COMPONENTS
+------------------------------------------------------------------
+The following external components are originally licensed under the MIT License 
+and are included here under the terms of the GPLv3 compatibility:
+
+- Grad_Meh (Copyright (C) 2020 Gruppe Adler)
+- GameMapStorage (Copyright (C) 2024 Julien Etelain)
