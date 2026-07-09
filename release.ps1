@@ -12,15 +12,136 @@ param(
     [string]$VcVarsVer = "14.44.35207"
 )
 
-if (-not $VsDevCmd) {
-    $VsDevCmd = "C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\Tools\VsDevCmd.bat"
-}
-
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $root
 
 $CheckArgs = @("check", "-p", "-Lc14", "-e")
+
+function Resolve-VsDevCmd {
+    param([string]$PreferredPath)
+
+    $candidates = New-Object System.Collections.Generic.List[string]
+    if ($PreferredPath) { $candidates.Add($PreferredPath) }
+
+    $commonRoots = @(
+        "C:\Program Files\Microsoft Visual Studio\2022",
+        "C:\Program Files (x86)\Microsoft Visual Studio\2022"
+    )
+    $editions = @("Community", "Professional", "Enterprise", "BuildTools")
+    foreach ($rootPath in $commonRoots) {
+        foreach ($edition in $editions) {
+            $candidates.Add((Join-Path $rootPath "$edition\Common7\Tools\VsDevCmd.bat"))
+        }
+    }
+
+    foreach ($candidate in $candidates) {
+        if ($candidate -and (Test-Path $candidate)) { return $candidate }
+    }
+
+    return $null
+}
+
+function Test-CommandPresent {
+    param(
+        [string]$Name,
+        [switch]$Required
+    )
+
+    if (Get-Command $Name -ErrorAction SilentlyContinue) {
+        return $true
+    }
+
+    if ($Required) {
+        throw "Required command '$Name' is not on PATH."
+    }
+
+    return $false
+}
+
+function Write-PreflightReport {
+    param(
+        [string]$ResolvedVsDevCmd
+    )
+
+    $issues = New-Object System.Collections.Generic.List[string]
+    $notes = New-Object System.Collections.Generic.List[string]
+
+    if (-not (Test-CommandPresent -Name "hemtt")) { $issues.Add("hemtt is not on PATH.") }
+
+    if (-not $ResolvedVsDevCmd) {
+        $issues.Add("VsDevCmd.bat was not found. Set RAMET_VSDEVCMD or pass -VsDevCmd.")
+    } else {
+        $notes.Add("Using VsDevCmd.bat at '$ResolvedVsDevCmd'.")
+    }
+
+    $vsInstaller = "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe"
+    if (-not (Test-Path $vsInstaller)) {
+        $notes.Add("vswhere.exe was not found at '$vsInstaller'; .NET AOT linking may fail if the Visual Studio Installer is absent.")
+    }
+
+    $gradRepo = Join-Path $root "subprojects\grad_meh"
+    $ocapRepo = Join-Path $root "subprojects\ocap-renderterrain"
+    $a3meRepo = Join-Path $root "subprojects\arma3MapExporter"
+
+    $gradDll = Find-GradMehDll -Repo $gradRepo
+    $gradReleaseReady = Test-Path (Join-Path $gradRepo ".hemttout\release")
+    $ocapReleaseReady = Test-Path (Join-Path $ocapRepo ".hemttout\release")
+    $a3meReleaseReady = $false
+    foreach ($candidate in @(
+        (Join-Path $a3meRepo "@arma3MapExporter\.hemttout\release\@arma3MapExporter"),
+        (Join-Path $a3meRepo "@arma3MapExporter\.hemttout\release")
+    )) {
+        if (Test-Path (Join-Path $candidate "addons")) {
+            $a3meReleaseReady = $true
+            break
+        }
+    }
+
+    if (-not (Test-Path (Join-Path $root ".hemtt\project.toml"))) {
+        $issues.Add(".hemtt\\project.toml is missing at the repository root.")
+    }
+
+    if ($SkipSubprojects) {
+        if (-not $gradReleaseReady) { $issues.Add("subprojects\\grad_meh\\.hemttout\\release is missing, but -SkipSubprojects was set.") }
+        if (-not $ocapReleaseReady) { $issues.Add("subprojects\\ocap-renderterrain\\.hemttout\\release is missing, but -SkipSubprojects was set.") }
+        if (-not $a3meReleaseReady) { $issues.Add("subprojects\\arma3MapExporter\\@arma3MapExporter\\.hemttout\\release is missing, but -SkipSubprojects was set.") }
+    } else {
+        if (-not $gradDll -or $RebuildGradMehDll) {
+            if (-not (Test-CommandPresent -Name "conan")) { $issues.Add("conan is required to build grad_meh_x64.dll.") }
+            if (-not (Test-CommandPresent -Name "cmake")) { $issues.Add("cmake is required to build grad_meh_x64.dll.") }
+            if (-not (Test-CommandPresent -Name "ninja")) { $issues.Add("ninja is required to build grad_meh_x64.dll.") }
+            if (-not (Test-CommandPresent -Name "cargo")) { $issues.Add("cargo is required to build grad_meh_x64.dll.") }
+        }
+
+        if (-not $a3meReleaseReady) {
+            if (-not (Test-CommandPresent -Name "dotnet")) { $issues.Add("dotnet SDK is required to build @arma3MapExporter.") }
+            if (-not $ResolvedVsDevCmd) { $issues.Add("VsDevCmd.bat is required to build @arma3MapExporter.") }
+        }
+    }
+
+    Write-Host "=== preflight ===" -ForegroundColor Cyan
+    foreach ($note in $notes) {
+        Write-Host "  note: $note" -ForegroundColor DarkGray
+    }
+
+    if ($issues.Count -gt 0) {
+        Write-Host "  blocking issues:" -ForegroundColor Yellow
+        foreach ($issue in $issues) {
+            Write-Host "  - $issue" -ForegroundColor Yellow
+        }
+        throw "Preflight failed. Fix the blocking issues above, then re-run release.ps1."
+    }
+
+    Write-Host "  all required build tools and local project files were found." -ForegroundColor Green
+}
+
+if (-not $VsDevCmd) {
+    $VsDevCmd = "C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\Tools\VsDevCmd.bat"
+}
+
+$VsDevCmd = Resolve-VsDevCmd -PreferredPath $VsDevCmd
+Write-PreflightReport -ResolvedVsDevCmd $VsDevCmd
 
 function Invoke-Hemtt {
     param([string]$Dir)
@@ -176,7 +297,18 @@ if (-not $SkipSubprojects) {
     Write-Host "=== building subprojects/ocap-renderterrain ===" -ForegroundColor Cyan
     Invoke-Hemtt "subprojects\ocap-renderterrain"
     Write-Host "=== building subprojects/arma3MapExporter (dotnet AOT + hemtt release) ===" -ForegroundColor Cyan
-    $a3meReleaseDir = Build-Arma3MapExporter -Repo (Join-Path $root "subprojects\arma3MapExporter")
+    $a3meExistingCandidates = @(
+        (Join-Path $root "subprojects\arma3MapExporter\@arma3MapExporter\.hemttout\release\@arma3MapExporter"),
+        (Join-Path $root "subprojects\arma3MapExporter\@arma3MapExporter\.hemttout\release")
+    )
+    foreach ($c in $a3meExistingCandidates) {
+        if (Test-Path (Join-Path $c "addons")) { $a3meReleaseDir = $c; break }
+    }
+    if (-not $a3meReleaseDir) {
+        $a3meReleaseDir = Build-Arma3MapExporter -Repo (Join-Path $root "subprojects\arma3MapExporter")
+    } else {
+        Write-Host "  > reusing existing @arma3MapExporter release at $a3meReleaseDir" -ForegroundColor DarkGray
+    }
 }
 if (-not $a3meReleaseDir) {
     # SkipSubprojects path, or previous build attempt — locate prior hemtt release output.
