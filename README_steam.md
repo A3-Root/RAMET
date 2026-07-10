@@ -1,85 +1,81 @@
 [h1]RAMET — Root's Arma Map Export Tool[/h1]
 
-RAMET is a single, end-to-end pipeline for exporting Arma 3 terrain into planner-ready raster and vector tile sets. It absorbs three export methods (grad_meh, ocap-renderterrain, and an in-game GMS exporter) plus a vendored, RAMET-patched Intercept into one [i][b]@root_amet[/b][/i] mod, post-processes the raw exports through Docker, and hands off a unified [i][b]map.json[/b][/i] tile tree ready for a web map planner.
+RAMET exports Arma 3 terrains into raster and vector map tiles for a web map planner. It is a terrain export pipeline, not a gameplay mod.
 
-[hr][h2]How To Use[/h2]
+[hr][h2]Pre-requisites[/h2]
 [list]
-[*]Subscribe and load this mod together with [i][b][url=https://steamcommunity.com/workshop/filedetails/?id=450814997]@CBA_A3[/url][/b][/i]. Also place [i][b]flatdevil_x64.dll[/b][/i] (from [url=https://github.com/A3-Root/FlatDevil]FlatDevil[/url]) directly in your Arma 3 install folder, and make sure a system Python 3.7+ install is available.
-[*]In the main menu, pick the spotlight tile for the export you want: [i][b]RAMET — Grad_meh export[/b][/i] (stable branch), [i][b]RAMET — OCAP export (diag)[/b][/i] (diagnostic branch), or [i][b]RAMET — In-Game export (GMS)[/b][/i] (stable branch). Each opens a picker UI for manual world selection. 
-[*]Prefer an unattended run instead? Edit [i][b]@root_amet\batch\worlds.txt[/b][/i] and use the matching [i][b]batch\01_export_grad_meh.bat[/b][/i] / [i][b]02_export_ocap.bat[/b][/i] launcher (Windows only).
-[*]Once export finishes, run [i][b]batch\03_postprocess.bat[/b][/i] (or [i][b].sh[/b][/i] on Linux/WSL) — no Arma required for this step. It merges the raw export, builds PMTiles, slices SVG layers, optimizes tiles, and verifies the result, entirely inside Docker. Requires Docker running.
-[*]Push the finished tiles to your planner with [i][b]batch\04_deploy.bat[/b][/i] (local copy) or pack them for upload with [i][b]batch\05_zip_for_upload.bat[/b][/i]. Both have Linux [i][b].sh[/b][/i] equivalents.[/list]
+[*][b]RAMET:[/b] Subscribe to this Workshop item and enable it in the Arma 3 launcher.
+[*][b]CBA:[/b] Subscribe to and enable [url=https://steamcommunity.com/workshop/filedetails/?id=450814997]CBA_A3[/url]. Load it together with RAMET.
+[*][b]FlatDevil:[/b] Download [url=https://github.com/A3-Root/FlatDevil]FlatDevil (Github)[/url] or [url=https://steamcommunity.com/workshop/filedetails/?id=450814997]FlatDevil (Steam Workshop)[/url]. Place [i][b]flatdevil_x64.dll[/b][/i] directly in the Arma 3 installation folder, next to [i][b]arma3_x64.exe[/b][/i], not inside the RAMET folder. Install Python 3.7 or newer and make sure [i][b]python[/b][/i] works in a new terminal.
+[*][b]Terrain:[/b] Install or subscribe to the terrain you want to export, along with its required dependencies. Enable the terrain mod in the launcher with RAMET and CBA. A terrain that is only installed but not enabled will not be available to RAMET.[/list]
+To find the Arma 3 installation folder in Steam, right-click [i]Arma 3 → Manage → Browse local files[/i]. After extracting a release, the folder should look like this:
+[code]Arma 3\arma3_x64.exe
+Arma 3\flatdevil_x64.dll
+Arma 3\@root_amet\[/code]
 
-Everything is driven by [url=https://github.com/A3-Root/FlatDevil]FlatDevil (Github)[/url] / [url=https://github.com/A3-Root/FlatDevil]FlatDevil (Steam Workshop)[/url], which bridges Arma's SQF side to the bundled Python tooling — the batch queue survives crashes and per-world relaunches automatically.
+[hr][h2]First Run[/h2]
 
-[hr][h2]What It Does[/h2]
+[b]1. Enable the correct mods.[/b] In the Arma 3 launcher, enable [i][b]@root_amet[/b][/i], [i][b]@CBA_A3[/b][/i], the target terrains, and every dependency required by that terrain. Keep the terrain enabled while exporting.
+[b]2. Pick the correct Arma branch.[/b]
+[list][*][b]Stable/main branch:[/b] use [i][b]RAMET — Grad_meh export[/b][/i] for the regular satellite + vector export, or [i][b]RAMET — In-Game export (GMS)[/b][/i] for an in-game aerial export.
+[*][b]Diagnostic/development branch:[/b] use [i][b]RAMET — OCAP export (diag)[/b][/i]. This requires the diagnostic executable; the stable executable does not provide the necessary OCAP export function.[/list]
+[b]3. Open RAMET.[/b] Start Arma, select the RAMET spotlight/menu entry, choose the terrain(s), and begin the export. Large terrains can take a while. Do not close Arma or disable the terrain during the export.
+[b]4. Post-process the result.[/b] Install and start [url=https://www.docker.com/products/docker-desktop/]Docker Desktop[/url]. Open a terminal in the Arma 3 installation folder and run:[code]@root_amet\batch\03_postprocess.bat[/code]
+
+The finished tiles will be saved to [i][b]Arma 3\ramet_output\{world}\[/b][/i]. Docker provides the tile-processing tools, so you do not need to install tippecanoe, PMTiles, cwebp, pngquant, or oxipng separately.
+
+To copy tiles into a local planner, use [i][b]@root_amet\batch\04_deploy.bat --planner-root "C:\path\to\your\planner\map_tiles"[/b][/i]. To create upload archives, use [i][b]@root_amet\batch\05_zip_for_upload.bat[/b][/i]; the archives will be found under [i][b]ramet_output\_zips\[/b][/i].
+
+[hr][h2]Exporting a queue of terrains[/h2]
+For automatic exports, edit [i][b]@root_amet\batch\worlds.txt[/b][/i]. Add one exact Arma [i]CfgWorlds[/i] class name per line, for example:[code]altis
+stratis
+my_custom_world
+[/code]
+Use the class name, not necessarily the display name shown in the launcher. The terrain mods for every listed world must be installed and enabled.
+[list]
+[*]On the stable branch, double-click [i][b]@root_amet\batch\01_export_grad_meh.bat[/b][/i].
+[*]On the diagnostic branch, double-click [i][b]@root_amet\batch\02_export_ocap.bat[/b][/i].
+[/list]
+The scripts will launch the correct Arma executable and use FlatDevil to work through the queue. They can resume after crashes or restarts. Check [i][b]ramet_state\ramet_bulk.log[/b][/i] for progress, then run [i][b]03_postprocess.bat[/b][/i].
+
+[hr][h2]Which exporter should I use?[/h2]
+[table]
+[tr][th]Exporter[/th][th]Branch[/th][th]Use it for[/th][/tr]
+[tr][td]Grad_meh[/td][td]Stable/main[/td][td]Normal satellite + vector map data[/td][/tr]
+[tr][td]OCAP RenderTerrain[/td][td]Diagnostic[/td][td]High-resolution OCAP terrain tile pyramids[/td][/tr]
+[tr][td]In-Game/GMS[/td][td]Stable/main[/td][td]Aerial imagery captured through the game[/td][/tr]
+[/table]
+You can run more than one exporter for the same terrain. Post-processing will use whichever valid source data exists and will only include layers that were actually produced.
+
+[hr][h2]Troubleshooting[/h2]
+[list]
+[*][b]RAMET is missing:[/b] confirm that the Workshop item is enabled, CBA is enabled, and the terrain and its dependencies are enabled. Restart Arma after changing mods.
+[*][b]The terrain is missing from the picker:[/b] install and enable its terrain mod and dependencies. RAMET reads the terrains currently loaded by Arma.
+[*][b]FlatDevil or Python errors:[/b] confirm that [i][b]flatdevil_x64.dll[/b][/i] is next to [i][b]arma3_x64.exe[/b][/i], Python 3.7+ is installed, and Arma was restarted after installing the DLL.
+[*][b]OCAP reports that diag_exportTerrainSVG is missing:[/b] switch Steam to the Arma 3 diagnostic/development branch and run the diagnostic executable.
+[*][b]Post-processing fails:[/b] start Docker Desktop and wait until it indicates Docker is running. If OCAP rendering already finished, retry with [i][b]@root_amet\batch\03_postprocess.bat --skip-ocap[/b][/i].
+[/list]
+[b]For the full beginner-friendly guide, batch details, output locations, and build instructions, read the [url=https://github.com/A3-Root/RAMET/blob/main/README.md]README.md on GitHub[/url].[/b]
+
+[hr][h2]Important notes[/h2]
 
 [list]
-[*] Exports Arma 3 terrain via three methods for different fidelity/viewpoint tradeoffs: grad_meh (satellite + vector), OCAP-renderterrain (tile pyramids), and an in-game GMS aerial capture.
-[*] Auto-detects stable vs. diagnostic Arma binaries and adapts which spotlight tiles show and how the vendored Intercept host boots.
-[*] Drives exports through in-game spotlight UIs or an unattended batch queue ([i][b]batch\worlds.txt[/i][/b]), resumable across crashes and branch swaps.
-[*] Post-processes raw exports into a unified [i][b]ramet_output/{world}/[/i][/b] tile tree (PMTiles, WebP raster pyramids, sliced SVG layers, DEM) entirely inside Docker.
-[*] Deploys or zips the finished tile tree for a local or remote web map planner.[/list]
-
-[hr][h2]Important Notes[/h2]
-[list]
-[*][b]Source-available, build-your-own DLLs:[/b] this Workshop item ships the full source for all three native export extensions (grad_meh, ocap_exporter, arma3MapExporter) alongside the mod itself. If a prebuilt [i][b].dll[/b][/i] for your platform isn't already present, build it with the included [i][b]release.ps1[/b][/i] (Windows) / [i][b]release.sh[/b][/i] (Linux) scripts. 
-[*][b]HEMTT required to build:[/b] rebuilding from source requires [url=https://github.com/BrettMayson/HEMTT]HEMTT[/url] on [i][b]PATH[/i][/b]. [i][b]release.ps1[/i][/b] / [i][b]release.sh[/i][/b] call [i][b]hemtt check[/i][/b] + [i][b]hemtt release[/i][/b] directly — without it, nothing builds.
-[*][b]Docker required for post-processing:[/b] turning an in-game export into finished tiles ([i][b]batch\03_postprocess.bat[/i][/b] / [i][b].sh[/i][/b]) runs entirely in Docker (tippecanoe, pmtiles, cwebp, pngquant, oxipng). No host install of those tools is needed, but Docker itself must be running.
-[*][b]Windows is the fully supported platform end to end:[/b] in-game export (grad_meh, OCAP, GMS) only works against a Windows Arma 3 client — Proton included, since it still runs the same Windows client. Linux is supported for the post-process/deploy/zip steps and for cross-compiling the ocap_exporter DLL; grad_meh and arma3MapExporter DLLs always require a Windows toolchain.
-[*][b]Not a finished gameplay mod:[/b] this is a terrain/map export/tooling pipeline.
-[*][b]Read the README.md[/b] for more instructions, and troubleshooting options[/list]
+[*]Windows is the fully supported export platform. Linux/WSL can run post-processing, deployment, and zip steps. Building the Grad_meh and GMS native DLLs requires Windows tools.
+[*]This Workshop item includes source for the native extensions. Rebuilding from source requires [url=https://github.com/BrettMayson/HEMTT]HEMTT[/url] and the toolchains described in [i][b]README.md[/b][/i]. It is recommended to build from source if you face any issues though the provided DLL should work out of the box in most cases.
+[/list]
 
 [hr][h2]Credits[/h2]
 [list]
-[*] [b]Root[/b] - Author
-[*][b]IndigoFox[/b] - [url=https://github.com/indig0fox/ocap-renderterrain]OCAP-RenderTerrain[/url]
-[*][b]IDI-Systems[/b] - [url=https://github.com/intercept/intercept]Intercept[/url]
-[*][b]Gruppe Adler[/b] - [url=https://github.com/gruppe-adler/grad_meh]Grad Meh[/url]
-[*][b]Julien Etelain[/b] - [url=https://github.com/jetelain/GameMapStorage.Arma3]Game Map Storage Arma 3[/url][/list]
+[*][b]Root[/b] — Author
+[*][b]IndigoFox[/b] — [url=https://github.com/indig0fox/ocap-renderterrain]OCAP-RenderTerrain[/url]
+[*][b]IDI-Systems[/b] — [url=https://github.com/intercept/intercept]Intercept[/url]
+[*][b]Gruppe Adler[/b] — [url=https://github.com/gruppe-adler/grad_meh]Grad Meh[/url]
+[*][b]Julien Etelain[/b] — [url=https://github.com/jetelain/GameMapStorage.Arma3]Game Map Storage Arma 3[/url]
+[/list]
 
-[hr]
-[h2]Links[/h2]
+[hr][h2]Links[/h2]
 [url=https://github.com/A3-Root/RAMET][img]https://i.imgur.com/lPLHihO.gif[/img][/url]
-[url=https://discord.gg/77th-jsoc-official][img]https://i.imgur.com/8B7UcQ2.gif[/img][/url]
+[url=https://discord.gg/qQXg8tB7gr][img]https://i.imgur.com/8B7UcQ2.gif[/img][/url]
 
-[hr]
-[h2]License[/h2]
-The combined project is distributed under the [b]Arma Public License Share Alike (APL-SA)[/b].
-
-===============================================================================
-[h3]PROJECT LICENSE (Arma Public License Share Alike - APL-SA)[/h3]
-===============================================================================
-[b]Copyright (C) 2026 A3-Root (aka xMidnightSnowx)
-[/b]
-With this licence you are free to adapt (i.e. modify, rework or update) and 
-share (i.e. copy, distribute or transmit) the material under the following conditions:
-[list]
-[*][b]Attribution:[/b] You must attribute the material in the manner specified by the author or licensor (but not in any way that suggests that they endorse you or your use of the material).
-[*][b]Noncommercial:[/b] You may not use this material for any commercial purposes.
-[*][b]Arma Only:[/b] You may not convert or adapt this material to be used in other games than Arma.
-[*][b]Share Alike:[/b] If you adapt, or build upon this material, you may distribute the resulting material only under the same license.
-[/list]
-Full license text and legal provisions can be found at: 
-https://www.bohemia.net/community/licenses/arma-public-license-share-alike
-
-===============================================================================
-[h3]ORIGINAL COMPONENTS & THIRD-PARTY NOTICES[/h3]
-===============================================================================
-
-[b]1. APL-SA LICENSED COMPONENTS (SHARE-ALIKE REQUIREMENT)[/b]
--------------------------------------------------------
-This project incorporates components licensed under the APL-SA. Due to the 
-Share Alike provisions, the combined project is distributed under the same terms:
-[list][*][b]Copyright (C) 2023 IndigoFox[/b][/list]
-
-[b]2. STANDALONE MIT LICENSED COMPONENTS[/b]
--------------------------------------------------------
-The following external components are originally licensed under the MIT License. 
-They are fully compatible with permissive reuse and are included here under 
-the combined APL-SA project distribution:
-[list]
-[*]Intercept ([b]Copyright (C) 2016 International Development and Integration Systems, LLC (IDI-Systems) for Intercept[/b])
-[*]Grad_Meh ([b]Copyright (C) 2020 Gruppe Adler[/b])
-[*]GameMapStorage ([b]Copyright (C) 2024 Julien Etelain[/b])
-[/list]
+[hr][h2]License[/h2]
+The combined project is distributed under the [b]Arma Public License Share Alike (APL-SA)[/b]. See [url=https://www.bohemia.net/community/licenses/arma-public-license-share-alike]the full license[/url] and the included [i][b]LICENSE[/b][/i] file for legal terms and third-party notices.

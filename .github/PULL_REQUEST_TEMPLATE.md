@@ -27,7 +27,7 @@ Describe what changed and why.
 ## Validation
 
 - [ ] `hemtt check -p -Lc14 -e` passes
-- [ ] Tested in Arma 3 with `@CBA_A3` loaded (spotlight tiles and/or batch queue)
+- [ ] Tested in Arma 3 with `@CBA_A3` and `flatdevil_x64.dll` loaded (spotlight tiles and/or batch queue)
 - [ ] Tested on both stable and diagnostic branches when diag-build detection is relevant
 - [ ] Ran `batch\03_postprocess.bat` / `.sh` end to end when the post-process pipeline changed
 - [ ] Ran `release.ps1` / `release.sh` end to end when build/release/`.hemtt` config changed
