@@ -499,8 +499,10 @@ Repair-MissingDependencies
 $VsDevCmd = Resolve-VsDevCmd -PreferredPath $VsDevCmd
 Write-PreflightReport -ResolvedVsDevCmd $VsDevCmd
 
+Remove-Item -Path ".hemttout" -Recurse -Force -ErrorAction SilentlyContinue
+
 if ($Clean) {
-    $cleanPaths = @(".hemttout", "releases")
+    $cleanPaths = @("releases")
     if (-not $SkipSubprojects) {
         $cleanPaths += "subprojects\arma3MapExporter\publish"
     }

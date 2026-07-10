@@ -220,8 +220,10 @@ done
 
 preflight_report
 
+rm -rf ".hemttout"
+
 if [[ "$CLEAN" -eq 1 ]]; then
-    rm -rf ".hemttout" "releases"
+    rm -rf "releases"
     # arma3MapExporter/publish and grad_meh's build/ are never wiped here — this script
     # never rebuilds them (Windows-toolchain-only), so any prebuilt DLL placed there is
     # the user's input to package, not a stale artifact to clean.

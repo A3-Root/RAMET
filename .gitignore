@@ -4,13 +4,12 @@
 *.biprivatekey
 *.hemttprivatekey
 *.pbo
-*.zip
 *.bisign
 .hemttout
 hemtt
 hemtt.exe
-releases
 references/
+root_amet-latest.zip
 
 # =========================
 # Python
