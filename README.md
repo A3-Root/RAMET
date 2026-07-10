@@ -165,7 +165,9 @@ The scripts should be inside `Arma 3\@root_amet\batch\`. They look for Arma by g
 
 Most users should use a release zip and skip this section. Developers rebuilding RAMET should use `release.ps1` on Windows or `release.sh` on Linux/WSL. HEMTT is required and must be on `PATH`.
 
-Windows is the fully supported build and export platform. The complete Windows build needs HEMTT, Docker, Visual Studio 2022 with Desktop C++, the Windows SDK, .NET 10 SDK, Conan 2, CMake, Ninja, Rust, Go, and Python 3.10 or newer. Linux/WSL can build the OCAP DLL and run post-processing, deploy, and zip. However, the Grad_meh and GMS native DLLs require Windows tools. For a source checkout with existing native binaries, `release.ps1 -SkipSubprojects` or `./release.sh --skip-subprojects` can package the mod without rebuilding them.
+Windows is the fully supported build and export platform. The complete Windows build needs HEMTT, Docker, Visual Studio 2022 with Desktop C++, the Windows SDK, .NET 10 SDK, Conan 2, CMake, Ninja, Rust, Go, a Windows MinGW-w64/MSYS2 `gcc`, and Python 3.10 or newer. Linux/WSL can build the OCAP DLL and run post-processing, deploy, and zip. However, the Grad_meh and GMS native DLLs require Windows tools. For a source checkout with existing native binaries, `release.ps1 -SkipSubprojects` or `./release.sh --skip-subprojects` can package the mod without rebuilding them.
+
+When `release.ps1` starts, it refreshes `PATH` and checks common installation locations before reporting a tool as missing. If Docker Desktop is installed but stopped, the script starts it and waits for the daemon. For supported tools, it offers to install them with `winget`; MSYS2 can install the MinGW-w64 GCC package needed by the OCAP Go/cgo build. HEMTT and Visual Studio still need user-directed installation when they are not found. The script reruns its checks after these repairs.
 
 ## Project documentation
 
