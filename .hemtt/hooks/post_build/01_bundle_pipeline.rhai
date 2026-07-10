@@ -103,4 +103,25 @@ if intercept_dll.exists() {
     print("[RAMET post_build] WARN: vendor/intercept/intercept_x64.dll missing");
 }
 
+// Remove generated Python caches and debug symbols from the staged output.
+let generated_cache_dirs = [
+    out.join("ramet").join("__pycache__"),
+    out.join("tools").join("__pycache__"),
+    out.join("ocap_renderterrain").join("__pycache__")
+];
+for dir in generated_cache_dirs {
+    if dir.exists() {
+        dir.remove_dir_all();
+    }
+}
+
+let generated_debug_files = [
+    out.join("subprojects").join("grad_meh").join("intercept").join("rv").join("intercept_x64.pdb")
+];
+for file in generated_debug_files {
+    if file.exists() {
+        file.remove_file();
+    }
+}
+
 print("[RAMET post_build] done");

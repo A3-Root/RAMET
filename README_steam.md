@@ -62,6 +62,7 @@ You can run more than one exporter for the same terrain. Post-processing will us
 [list]
 [*]Windows is the fully supported export platform. Linux/WSL can run post-processing, deployment, and zip steps. Building the Grad_meh and GMS native DLLs requires Windows tools.
 [*]This Workshop item includes source for the native extensions. Rebuilding from source requires [url=https://github.com/BrettMayson/HEMTT]HEMTT[/url] and the toolchains described in [i][b]README.md[/b][/i]. The OCAP Go/cgo build also needs a Windows MinGW-w64/MSYS2 [i][b]gcc[/b][/i] on [i][b]PATH[/b][/i]. The provided DLLs should work without a local build. [i][b]release.ps1[/b][/i] can detect common install locations, start an installed-but-stopped Docker Desktop, and offer [i][b]winget[/b][/i] installs for supported missing tools.
+[*]A normal [i][b]release.ps1 -Clean[/b][/i] run reuses the provided OCAP DLL. Use [i][b]release.ps1 -RebuildOcapDll -RebuildGradMehDll[/b][/i] only when you want to rebuild it; [i][b]-NoRebuildOcapDll -NoRebuildGradMehDll[/b][/i] skips these targets even when the DLL is missing.
 [/list]
 
 [hr][h2]Credits[/h2]

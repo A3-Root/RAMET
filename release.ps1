@@ -11,8 +11,10 @@ param(
     [switch]$SkipSubprojects,
     [switch]$Clean,
     [switch]$RebuildGradMehDll,
+    [switch]$RebuildOcapDll,
     [switch]$NoClean,
     [switch]$NoRebuildGradMehDll,
+    [switch]$NoRebuildOcapDll,
     [string]$VsDevCmd = $env:RAMET_VSDEVCMD,
     [string]$VcVarsVer = "14.44.35207"
 )
@@ -41,6 +43,7 @@ trap {
 
 $Clean = $false
 $RebuildGradMehDll = $false
+$RebuildOcapDll = $false
 
 # A plain ./release.ps1 keeps the historical clean-first behavior. Once the
 # caller supplies any flag, every action must be explicit. In particular,
@@ -52,6 +55,8 @@ if ($PSBoundParameters.ContainsKey("Clean")) { $Clean = $true }
 if ($NoClean) { $Clean = $false }
 if ($PSBoundParameters.ContainsKey("RebuildGradMehDll")) { $RebuildGradMehDll = $true }
 if ($NoRebuildGradMehDll) { $RebuildGradMehDll = $false }
+if ($PSBoundParameters.ContainsKey("RebuildOcapDll")) { $RebuildOcapDll = $true }
+if ($NoRebuildOcapDll) { $RebuildOcapDll = $false }
 
 $CheckArgs = @("check", "-p", "-Lc14", "-e")
 $GradMehDllRelativePath = "build\lib64\grad_meh_x64.dll"
@@ -277,14 +282,25 @@ function Repair-MissingDependencies {
         @{ Command = "python"; Name = "Python 3"; Id = "Python.Python.3.12"; Hint = "https://www.python.org/downloads/windows/" },
         @{ Command = "hemtt"; Name = "HEMTT"; Id = $null; Hint = "https://github.com/BrettMayson/HEMTT/releases" }
     )
+    $gradRepo = Join-Path $root "subprojects\grad_meh"
+    $gradDll = Find-GradMehDll -Repo $gradRepo
+    $ocapRepo = Join-Path $root "subprojects\ocap-renderterrain\ocap-exporter"
+    $ocapDll = Find-OcapExporterDll -Repo $ocapRepo
+    $gradRebuildNeeded = $RebuildGradMehDll -or (-not $gradDll -and -not $NoRebuildGradMehDll)
+    $ocapRebuildNeeded = $RebuildOcapDll -or (-not $ocapDll -and -not $NoRebuildOcapDll)
+
     if (-not $SkipSubprojects) {
-        $toolSpecs += @(
-            @{ Command = "go"; Name = "Go"; Id = "GoLang.Go"; Hint = "https://go.dev/dl/" },
-            @{ Command = "cmake"; Name = "CMake"; Id = "Kitware.CMake"; Hint = "https://cmake.org/download/" },
-            @{ Command = "ninja"; Name = "Ninja"; Id = "Ninja-build.Ninja"; Hint = "https://github.com/ninja-build/ninja/releases" },
-            @{ Command = "cargo"; Name = "Rust"; Id = "Rustlang.Rustup"; Hint = "https://rustup.rs/" },
-            @{ Command = "dotnet"; Name = ".NET SDK"; Id = "Microsoft.DotNet.SDK.10"; Hint = "https://dotnet.microsoft.com/download/dotnet/10.0" }
-        )
+        $toolSpecs += @{ Command = "dotnet"; Name = ".NET SDK"; Id = "Microsoft.DotNet.SDK.10"; Hint = "https://dotnet.microsoft.com/download/dotnet/10.0" }
+        if ($gradRebuildNeeded) {
+            $toolSpecs += @(
+                @{ Command = "cmake"; Name = "CMake"; Id = "Kitware.CMake"; Hint = "https://cmake.org/download/" },
+                @{ Command = "ninja"; Name = "Ninja"; Id = "Ninja-build.Ninja"; Hint = "https://github.com/ninja-build/ninja/releases" },
+                @{ Command = "cargo"; Name = "Rust"; Id = "Rustlang.Rustup"; Hint = "https://rustup.rs/" }
+            )
+        }
+        if ($ocapRebuildNeeded) {
+            $toolSpecs += @{ Command = "go"; Name = "Go"; Id = "GoLang.Go"; Hint = "https://go.dev/dl/" }
+        }
     }
 
     foreach ($spec in $toolSpecs) {
@@ -309,7 +325,9 @@ function Repair-MissingDependencies {
             }
         }
 
-        Install-Msys2Gcc | Out-Null
+        if ($ocapRebuildNeeded) {
+            Install-Msys2Gcc | Out-Null
+        }
         Refresh-ProcessPath
     }
 
@@ -362,7 +380,11 @@ function Write-PreflightReport {
         }
     }
 
-    if (-not $SkipSubprojects) {
+    $ocapRepo = Join-Path $root "subprojects\ocap-renderterrain\ocap-exporter"
+    $ocapDll = Find-OcapExporterDll -Repo $ocapRepo
+    $ocapRebuildNeeded = $RebuildOcapDll -or (-not $ocapDll -and -not $NoRebuildOcapDll)
+
+    if (-not $SkipSubprojects -and $ocapRebuildNeeded) {
         if (-not (Test-CommandPresent -Name "go")) {
             $issues.Add("Required command 'go' is missing for ocap_exporter_x64.dll.")
         }
@@ -670,9 +692,22 @@ if (-not $SkipSubprojects) {
         Write-Warning "arma3MapExporter DLL build failed — @root_amet will bundle without it (in-game export unavailable)."
     }
 
-    Write-Host "=== building ocap_exporter native DLL (go build) ===" -ForegroundColor Cyan
-    if (-not (Build-OcapExporterDll -Repo (Join-Path $root "subprojects\ocap-renderterrain\ocap-exporter"))) {
-        Write-Warning "ocap_exporter DLL build failed — @root_amet will bundle without it (OCAP batch export unavailable)."
+    $ocapRepo = Join-Path $root "subprojects\ocap-renderterrain\ocap-exporter"
+    $ocapDll = Find-OcapExporterDll -Repo $ocapRepo
+    if ($RebuildOcapDll -or (-not $ocapDll -and -not $NoRebuildOcapDll)) {
+        Write-Host "=== building ocap_exporter native DLL (go build) ===" -ForegroundColor Cyan
+        if ($RebuildOcapDll) {
+            Write-Host "  reason: -RebuildOcapDll was supplied" -ForegroundColor DarkGray
+        } elseif (-not $ocapDll) {
+            Write-Host "  reason: ocap_exporter_x64.dll is missing" -ForegroundColor DarkGray
+        }
+        if (-not (Build-OcapExporterDll -Repo $ocapRepo)) {
+            Write-Warning "ocap_exporter DLL build failed — @root_amet will bundle without it (OCAP batch export unavailable)."
+        }
+    } elseif ($ocapDll) {
+        Write-Host "=== ocap_exporter_x64.dll already exists; skipping native rebuild ===" -ForegroundColor DarkGray
+    } else {
+        Write-Warning "ocap_exporter_x64.dll is missing, but -NoRebuildOcapDll was supplied; @root_amet will bundle without OCAP batch export."
     }
 }
 

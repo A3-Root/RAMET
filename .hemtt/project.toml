@@ -15,8 +15,19 @@ include = [
     "ramet_logo.paa",
     "release.ps1",
     "release.sh",
-    # grad_meh source and build metadata. Generated build/install directories
-    # are deliberately not included.
+    "grad_meh_x64.dll",
+    "ocap_exporter_x64.dll",
+    "MapExportExtension_x64.dll",
+    "intercept_x64.dll",
+    "vendor/intercept/intercept_x64.dll",
+
+    # Include the source-build manifest and hook in the release package.
+    ".hemtt/project.toml",
+    ".hemtt/hooks/post_build/**",
+    "include/**",
+    "modules/$FLATDEVIL$",
+
+    # grad_meh source and build metadata. Generated build/install directories are deliberately not included.
     "subprojects/grad_meh/.gitmodules",
     "subprojects/grad_meh/CMakeLists.txt",
     "subprojects/grad_meh/CMakePresets.json",
@@ -33,8 +44,7 @@ include = [
     "subprojects/grad_meh/src/**",
     "subprojects/grad_meh/tools/**",
 
-    # arma3MapExporter source. The generated publish directory is excluded;
-    # the post_build hook stages its DLL when one exists.
+    # arma3MapExporter source. The generated publish directory is excluded; the post_build hook stages its DLL when one exists.
     "subprojects/arma3MapExporter/.gitmodules",
     "subprojects/arma3MapExporter/LICENSE",
     "subprojects/arma3MapExporter/MapExportExtension.sln",
