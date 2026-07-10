@@ -1,12 +1,11 @@
-// RAMET post_build: stage everything that ships INSIDE @root_amet but isn't
+// RAMET post_build: stage everything that ships INSIDE @root_amet that isn't
 // a PBO — the FlatDevil marker, the ramet/ python package, the ocap docker
 // context + process launcher, docs/tools/batch, and the four native DLLs.
 // HEMTT_OUT is @root_amet/ itself: everything written here ends up inside
-// the produced zip. There is no in-game Docker trigger anymore — post-
-// processing only ever runs via batch\03_postprocess.bat / .sh.
+// the produced zip.
 //
 // Missing DLLs (native chain not built this session) are warned, not fatal —
-// `hemtt check`/`hemtt build` must still succeed for SQF-only iteration.
+// `hemtt check -p -Lc14 -e` must still succeed for SQF-only iteration.
 
 print("[RAMET post_build] staging in-addon assets");
 
