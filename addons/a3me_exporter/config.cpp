@@ -6,7 +6,7 @@ class CfgPatches {
         units[] = {};
         weapons[] = {};
         requiredVersion = REQUIRED_VERSION;
-        requiredAddons[] = {"a3me_main"};
+        requiredAddons[] = {"root_amet_a3me_main"};
         author = "AUTHOR";
         VERSION_CONFIG;
     };

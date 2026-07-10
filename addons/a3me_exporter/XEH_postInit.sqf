@@ -19,7 +19,7 @@ addMissionEventHandler ["ExtensionCallback", {
 
 "mapExportExtension" callExtension "Warmup";
 
-a3me_export = {
+root_amet_a3me_export = {
 
 	systemChat "Taking screenshots...";
 
@@ -106,4 +106,4 @@ a3me_export = {
 
 #define DIK_HOME 0xC7 /* Home on arrow keypad */
 
-["Arma3 Map Export", "Launch export", ["Launch export", "Launch export"], {}, { [] spawn a3me_export; }, [DIK_HOME, [false, false, false]]] call CBA_fnc_addKeybind;
+["Arma3 Map Export", "Launch export", ["Launch export", "Launch export"], {}, { [] spawn root_amet_a3me_export; }, [DIK_HOME, [false, false, false]]] call CBA_fnc_addKeybind;

@@ -1,4 +1,4 @@
-#define COMPONENT main
+#define COMPONENT a3me_main
 #include "\z\root_amet\addons\a3me_main\script_mod.hpp"
 
 // #define DEBUG_MODE_FULL

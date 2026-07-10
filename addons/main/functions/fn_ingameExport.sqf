@@ -4,7 +4,7 @@
  *              Follows the ocap_renderterrain_fnc_export pattern exactly:
  *              stores queue in uiNamespace (survives mission loads),
  *              uses playScriptedMission to load each world in sequence,
- *              waits for a3me_export to be available then spawns it,
+ *              waits for the bundled in-game export function to be available then spawns it,
  *              polls the C# extension status until terminal, advances the queue.
  *
  * Arguments:
@@ -69,14 +69,14 @@ uiNamespace setVariable ["ramet_ingame_fnc_startMission", {
 				systemChat format ["[RAMET ingame]: Exporting %1 (%2/%3)", _currentWorld, _index + 1, count _maps];
 				waitUntil { !isNull findDisplay 46 };
 
-				// Wait for the bundled exporter's postInit to define a3me_export (up to 60 s).
+				// Wait for the bundled exporter to define its in-game export function (up to 60 s).
 				private _waitTs = diag_tickTime;
 				waitUntil {
 					sleep 1;
-					(!isNil "a3me_export") || (diag_tickTime - _waitTs > 60)
+					(!isNil "root_amet_a3me_export") || (diag_tickTime - _waitTs > 60)
 				};
 
-				if (isNil "a3me_export") exitWith {
+				if (isNil "root_amet_a3me_export") exitWith {
 					diag_log format ["[RAMET ingame]: ERROR — bundled exporter unavailable for %1.", _currentWorld];
 					systemChat "[RAMET ingame]: ERROR — bundled exporter unavailable, skipping world.";
 
@@ -99,7 +99,7 @@ uiNamespace setVariable ["ramet_ingame_fnc_startMission", {
 					call (uiNamespace getVariable "ramet_ingame_fnc_endWithDiag");
 				};
 
-				[] spawn a3me_export;
+				[] spawn root_amet_a3me_export;
 
 				// Poll C# extension status until terminal state.
 				private _terminal = false;

@@ -1,7 +1,7 @@
 /*
  * Author: Root
  * Description: Bulk-export every world in worlds.txt via the bundled map exporter (GMS).
- *              Drives the existing `a3me_export` SQF function directly per world,
+ *              Drives the bundled in-game export function directly per world,
  *              polls the C# extension status until Done/Error, advances the queue.
  *              Requires CBA + RAMET + flatdevil_x64.dll in Arma root.
  *
@@ -40,7 +40,7 @@ private _log = {
     diag_log text format ["[RAMET ingame] %1", _msg];
 };
 
-if (isNil "a3me_export") exitWith {
+if (isNil "root_amet_a3me_export") exitWith {
     ["ERROR: bundled exporter callback is unavailable"] call _log;
 };
 
@@ -56,7 +56,7 @@ while {true} do {
         [format ["exporting %1", _world]] call _log;
 
         // Direct SQF kick (primary path; synthetic Home keypress fallback only).
-        [] spawn a3me_export;
+        [] spawn root_amet_a3me_export;
 
         // Poll status from the C# extension until terminal state.
         private _terminal = false;

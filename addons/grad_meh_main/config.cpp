@@ -6,7 +6,7 @@ class CfgPatches {
 		units[] = {};
 		weapons[] = {};
 		requiredVersion = 1.92;
-		requiredAddons[] = { "intercept_core" };
+		requiredAddons[] = { "Intercept_Core" };
 		authors[] = { "Willard", "DerZade" };
 		url = "";
 		version = 2.14;

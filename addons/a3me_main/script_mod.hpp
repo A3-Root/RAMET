@@ -1,5 +1,5 @@
 #define MAINPREFIX z
-#define PREFIX a3me
+#define PREFIX root_amet
 
 #include "script_version.hpp"
 

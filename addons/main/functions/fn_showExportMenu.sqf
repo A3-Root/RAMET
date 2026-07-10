@@ -18,7 +18,7 @@ if (!isNil "ramet_exportRunning" && {ramet_exportRunning}) exitWith {
 
 private _gradAvailable = !isNil "gradMehExportMap";
 private _ocapAvailable = [] call ramet_fnc_isDiagBuild;
-private _ingameAvailable = !isNil "a3me_export";
+private _ingameAvailable = !isNil "root_amet_a3me_export";
 
 private _msg = format [
     "Select bulk export mode.\n\nGrad_meh available: %1\nOCAP (diag) available: %2\nIn-Game (GMS) available: %3\n\n(In-Game export is run from the main-menu spotlight tile.)",
