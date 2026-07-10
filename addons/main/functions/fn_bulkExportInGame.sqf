@@ -1,9 +1,9 @@
 /*
  * Author: Root
- * Description: Bulk-export every world in worlds.txt via GMS (arma3MapExporter).
+ * Description: Bulk-export every world in worlds.txt via the bundled map exporter (GMS).
  *              Drives the existing `a3me_export` SQF function directly per world,
  *              polls the C# extension status until Done/Error, advances the queue.
- *              Requires @arma3MapExporter + CBA + RAMET + flatdevil_x64.dll in Arma root.
+ *              Requires CBA + RAMET + flatdevil_x64.dll in Arma root.
  *
  * Public: No
  *
@@ -41,7 +41,7 @@ private _log = {
 };
 
 if (isNil "a3me_export") exitWith {
-    ["ERROR: a3me_export not defined — @arma3MapExporter not loaded"] call _log;
+    ["ERROR: bundled exporter callback is unavailable"] call _log;
 };
 
 [format ["bulk ingame export starting (worldName=%1)", worldName]] call _log;

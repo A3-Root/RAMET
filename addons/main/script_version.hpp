@@ -7,7 +7,7 @@
 #define MAJOR 1
 #define MINOR 5
 #define PATCH 0
-#define BUILD 2
+#define BUILD 3
 
 #define VERSION MAJOR.MINOR.PATCH.BUILD
 #define VERSION_AR MAJOR,MINOR,PATCH,BUILD

@@ -24,7 +24,7 @@ private _msg = format [
     "Select bulk export mode.\n\nGrad_meh available: %1\nOCAP (diag) available: %2\nIn-Game (GMS) available: %3\n\n(In-Game export is run from the main-menu spotlight tile.)",
     ["NO — main branch needed", "YES"] select _gradAvailable,
     ["NO — diagnostic branch needed", "YES"] select _ocapAvailable,
-    ["NO — @arma3MapExporter not loaded", "YES"] select _ingameAvailable
+    ["NO — bundled exporter unavailable", "YES"] select _ingameAvailable
 ];
 
 [

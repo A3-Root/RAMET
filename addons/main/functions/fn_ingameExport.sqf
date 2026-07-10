@@ -1,6 +1,6 @@
 /*
  * Author: Root
- * Description: Bulk in-game export via arma3MapExporter (GMS).
+ * Description: Bulk in-game export via the bundled map exporter (GMS).
  *              Follows the ocap_renderterrain_fnc_export pattern exactly:
  *              stores queue in uiNamespace (survives mission loads),
  *              uses playScriptedMission to load each world in sequence,
@@ -69,7 +69,7 @@ uiNamespace setVariable ["ramet_ingame_fnc_startMission", {
 				systemChat format ["[RAMET ingame]: Exporting %1 (%2/%3)", _currentWorld, _index + 1, count _maps];
 				waitUntil { !isNull findDisplay 46 };
 
-				// Wait for arma3MapExporter postInit to define a3me_export (up to 60 s).
+				// Wait for the bundled exporter's postInit to define a3me_export (up to 60 s).
 				private _waitTs = diag_tickTime;
 				waitUntil {
 					sleep 1;
@@ -77,8 +77,8 @@ uiNamespace setVariable ["ramet_ingame_fnc_startMission", {
 				};
 
 				if (isNil "a3me_export") exitWith {
-					diag_log format ["[RAMET ingame]: ERROR — a3me_export undefined for %1. @arma3MapExporter not loaded?", _currentWorld];
-					systemChat "[RAMET ingame]: ERROR — @arma3MapExporter not loaded, skipping world.";
+					diag_log format ["[RAMET ingame]: ERROR — bundled exporter unavailable for %1.", _currentWorld];
+					systemChat "[RAMET ingame]: ERROR — bundled exporter unavailable, skipping world.";
 
 					private _nextIndex = _index + 1;
 					uiNamespace setVariable ["ramet_ingame_index", _nextIndex];
