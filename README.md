@@ -10,158 +10,116 @@
 <!-- RAMET-RELEASE-BADGE:END -->
 </p>
 
-**Root's Arma Map Export Tool** — all in one tool for exporting Arma 3 terrain into planner-ready raster + vector tile sets.
+**Root's Arma Map Export Tool** — all-in-one export of Arma 3 terrain into planner-ready raster + vector tile sets.
 
-RAMET absorbs three export methods (`grad_meh` and an in-game GMS aerial exporter on the Arma main branch, `ocap-renderterrain` on the Arma diagnostic branch) plus a vendored, RAMET-patched Intercept, drives them through either batch queues or interactive spotlight UIs over [FlatDevil](github.com/A3-Root/FlatDevil), post-processes their outputs into a unified `ramet_output/{world}/` tree, and ships everything as a single `@root_amet` mod produced by one `hemtt release`. The output drops directly into the planner's tile source.
+RAMET combines three export methods — `grad_meh` (satellite + vector), `ocap-renderterrain` (tile pyramids, diag branch), and an in-game GMS aerial exporter — plus a vendored, RAMET-patched Intercept, into a single `@root_amet` mod. Exports run from in-game spotlight UIs or an unattended batch queue, post-process into a unified `ramet_output/{world}/` tile tree via Docker, and deploy straight into a web map planner.
 
-RAMET auto-detects which Arma binary is running (stable vs. diagnostic) and adapts: the Grad_meh and GMS spotlight tiles show on stable, the OCAP tile shows on diag, and the vendored Intercept host no-ops on the diag binary instead of crashing it.
+RAMET auto-detects the running Arma binary (stable vs. diagnostic) and adapts: Grad_meh/GMS spotlight tiles show on stable, the OCAP tile shows on diag, and the vendored Intercept host no-ops on diag instead of crashing.
+
+**Windows is the primary, fully supported platform end to end.** Linux covers post-process/deploy/zip (steps 3-5) plus an optional `ocap_exporter` cross-build — see [Dependencies](#dependencies).
 
 ## Quick start
 
-**Requires [HEMTT](https://github.com/BrettMayson/HEMTT) on `PATH`** — both `release.ps1` and `release.sh` call `hemtt check` + `hemtt release` directly and will not build without it.
+Requires [HEMTT](https://github.com/BrettMayson/HEMTT) on `PATH`. 
 
-1. Build & install
-   ```powershell
-   .\release.ps1
-   ```
+1. **Run** `.\release.ps1` (Windows) or `./release.sh --skip-subprojects` (Linux/WSL). This automatically checks and prompts the user to install necessary dependencies.
+2. **Unzip** `releases\root_amet-{ver}.zip` into your Arma 3 root.
+   Also needs `flatdevil_x64.dll` ([FlatDevil](github.com/A3-Root/FlatDevil)), `@CBA_A3`, any terrains, and system Python 3.7+ in the Arma 3 root.
+2. **Export** a map from the spotlight UI (`RAMET — Grad_meh export`, `RAMET — OCAP export (diag)`, `RAMET — In-Game export (GMS)`), or pre-seed `@root_amet\batch\worlds.txt` for the unattended batch queue.
+3. **Post-process**: `batch\03_postprocess.bat` (Windows) / `batch/03_postprocess.sh` (Linux/WSL/Git Bash) — merges exports, builds PMTiles, slices SVG, optimizes tiles, verifies. Entirely Docker-based.
+4. **Deploy or package**: `batch\04_deploy.bat`/`.sh` (local planner copy, needs `--planner-root` or `RAMET_PLANNER_ROOT`) or `batch\05_zip_for_upload.bat`/`.sh` (upload zips under `ramet_output\_zips\`).
 
-   Windows release path. It now defaults to a clean rebuild of the packaged artifacts: `-Clean` and `-RebuildGradMehDll` are treated as on unless you pass `-NoClean` or `-NoRebuildGradMehDll`. Unless `-SkipSubprojects` is passed, it also builds `grad_meh_x64.dll` (Conan/CMake/Ninja), `MapExportExtension_x64.dll` (dotnet AOT publish), and `ocap_exporter_x64.dll` (go build) in turn. The script also checks the repo-side dependencies it needs for the full package surface, then runs `hemtt check -p -Lc14 -e` + `hemtt release` at the repo root.
+Step 3 can be paused between worlds by creating `Arma3\ramet.pause` — delete it to resume.
 
-   ```bash
-   ./release.sh --skip-subprojects
-   ```
-   Linux/WSL packaging path. `grad_meh_x64.dll` and `MapExportExtension_x64.dll` always require a Windows toolchain (MSVC / .NET NativeAOT) and are never built here — bundled only if already present at `subprojects/grad_meh/build/lib64/grad_meh_x64.dll` and `subprojects/arma3MapExporter/publish/MapExportExtension_x64.dll`, otherwise HEMTT warns and packages without them. `ocap_exporter_x64.dll` is the exception: unless `--skip-subprojects` is passed, it's cross-compiled from Linux via `go` + `mingw-w64` (see Dependencies below).
+### Build script details
 
-   Unzip `releases\root_amet-{ver}.zip` into your Arma 3 root. `@root_amet\` is the only mod folder; it contains all 8 addons, `$FLATDEVIL$`, `ramet\`, `ocap_renderterrain\` (Docker context), `tools\`, `batch\`, `docs\`, and the native DLLs when they were built or already present in-tree. `grad_meh_x64.dll` is copied again under `intercept\` where Intercept scans for plugins.
+| Script | Platform | Native DLL builds |
+| --- | --- | --- |
+| `release.ps1` | Windows | Builds all three: `grad_meh_x64.dll` (Conan/CMake/Ninja), `MapExportExtension_x64.dll` (dotnet AOT), `ocap_exporter_x64.dll` (go), unless `-SkipSubprojects`. Defaults to `-Clean` + `-RebuildGradMehDll`; opt out with `-NoClean` / `-NoRebuildGradMehDll`. |
+| `release.sh` | Linux/WSL | `grad_meh_x64.dll` / `MapExportExtension_x64.dll` always require a Windows toolchain — bundled only if already present under `subprojects/`, never built here. `ocap_exporter_x64.dll` cross-compiles via `go` + `mingw-w64` unless `--skip-subprojects`. |
 
-   Prerequisite: `flatdevil_x64.dll` (from [FlatDevil](github.com/A3-Root/FlatDevil)) in the Arma 3 root, `@CBA_A3`, and a system Python 3.7+ install — FlatDevil discovers the interpreter at runtime.
+Both run `hemtt check -p -Lc14 -e` + `hemtt release` at the repo root; `grad_meh_x64.dll` is copied both to `@root_amet\` root and `@root_amet\intercept\` (where Intercept scans for plugins).
 
-2. Export a map from Arma using the spotlight UI for the process you want:
-   - `RAMET — Grad_meh export` on the main branch
-   - `RAMET — OCAP export (diag)` on the diagnostic branch
-   - `RAMET — In-Game export (GMS)` on the main branch
+## Supported flows
 
-   If you prefer the bulk queue path, optionally edit `@root_amet\batch\worlds.txt`. It may be empty. Put one `CfgWorlds` class per line and use `#` for comments.
+`@root_amet` + `@CBA_A3` load together on both Arma branches.
 
-3. Post-process the exported worlds:
-   - Windows: `batch\03_postprocess.bat`
-   - Linux / WSL / Git Bash: `batch/03_postprocess.sh`
+| Flow | Entry point | Branch | Output |
+| --- | --- | --- | --- |
+| Spotlight Grad_meh | `RAMET — Grad_meh export` | main | Manual world picker |
+| Spotlight OCAP | `RAMET — OCAP export (diag)` | diag | Manual world picker |
+| Spotlight In-Game | `RAMET — In-Game export (GMS)` | main | Manual world picker |
+| Batch grad_meh | `batch\01_export_grad_meh.bat` (Windows only) | main | `Arma3\grad_meh\{world}\` |
+| Batch OCAP | `batch\02_export_ocap.bat` (Windows only) | diag | `Arma3\ocap_exporter\{world}\` |
+| Post-process | `batch\03_postprocess.bat` / `.sh` | any | `Arma3\ramet_output\{world}\` |
+| Deploy | `batch\04_deploy.bat` / `.sh` | any | Planner `map_tiles\` directory |
+| Zip | `batch\05_zip_for_upload.bat` / `.sh` | any | `ramet_output\_zips\` |
 
-   This is the step that merges exporter output, builds PMTiles, slices SVG layers, optimizes tiles, and runs verification — entirely via Docker, so it's genuinely cross-platform. It also runs the ocap-renderterrain Docker render if the helper script exists. `.sh` is a native bash reimplementation (not a wrapper around the `.bat`) — it runs the same Docker commands directly, so it works on a real Linux box, not just WSL.
+`01`/`02` launch `arma3_64.exe`/`arma3diag_x64.exe` directly (Proton doesn't change this) — no `.sh` equivalent. `03`-`05` are genuine independent native implementations on both platforms, not one wrapping the other.
 
-4. Deploy or package:
-   - Local planner copy: `batch\04_deploy.bat` or `batch/04_deploy.sh`
-   - Upload zip: `batch\05_zip_for_upload.bat` or `batch/05_zip_for_upload.sh`
-
-   Both wrappers pass through to `tools/deploy_to_planner.py` (stdlib-only, OS-agnostic). The deploy path needs `--planner-root` or `RAMET_PLANNER_ROOT`; the zip path writes under `ramet_output\_zips\`.
-
-**Windows is the primary, fully end-to-end supported platform** — in-game export (steps that launch Arma itself) only works there. Linux support covers steps 3-5 above (Docker post-process, deploy, zip), which have no Windows-specific dependency. See "Linux support" under Dependencies for what that does and doesn't include.
-
-## Supported Flows
-
-`@root_amet` + `@CBA_A3` are loaded together in both Arma branches.
-
-| Flow | Entry point | Branch | What it does |
-| ---- | ----------- | ------ | ------------ |
-| Spotlight Grad_meh | `RAMET — Grad_meh export` spotlight | main | Opens the Grad_meh picker UI for manual world selection |
-| Spotlight OCAP | `RAMET — OCAP export (diag)` spotlight | diag | Opens the OCAP picker UI for manual world selection |
-| Spotlight In-Game | `RAMET — In-Game export (GMS)` spotlight | main | Opens the GMS picker UI for manual world selection |
-| Batch grad_meh | `batch\01_export_grad_meh.bat` (Windows only) | main | `gradMehExportMap` over `batch\worlds.txt` → `Arma3\grad_meh\{world}\` |
-| Batch OCAP | `batch\02_export_ocap.bat` (Windows only) | diag | `diag_exportTerrainSVG` + ocap exporter over `batch\worlds.txt` → `Arma3\ocap_exporter\{world}\` |
-| Post-process | `batch\03_postprocess.bat` / `batch/03_postprocess.sh` | n/a | Merge + PMTiles + SVG slice + optimize + verify → `Arma3\ramet_output\{world}\` |
-| Deploy | `batch\04_deploy.bat` / `batch/04_deploy.sh` | n/a | Copy `Arma3\ramet_output\{world}\` into the planner `map_tiles\` directory |
-| Zip | `batch\05_zip_for_upload.bat` / `batch/05_zip_for_upload.sh` | n/a | Pack `Arma3\ramet_output\{world}\` into upload zips |
-
-01/02 launch `arma3_64.exe`/`arma3diag_x64.exe` directly and only make sense against a Windows Arma 3 install (Proton runs the same Windows binary, it doesn't change this) — there is no `.sh` equivalent for them. 03-05 are genuinely cross-platform: the `.bat` and `.sh` versions are independent native implementations of the same logic, not one wrapping the other.
-
-Inside Arma, the automatic batch exporters use FlatDevil (`["ramet.bulk.next_world", ["grad_meh"]] call ramet_fnc_fdCall` etc.) to share queue state with the Python `ramet/` module, so the run survives crashes and per-world relaunches.
-
-Step 3 can be paused between worlds by creating `Arma3\ramet.pause` while `batch\03_postprocess.bat` is running. The Docker orchestrator checks for that sentinel before starting the next world and waits while it exists. Delete `Arma3\ramet.pause` to resume.
+Batch exporters advance their queue via FlatDevil (`["ramet.bulk.next_world", ["grad_meh"]] call ramet_fnc_fdCall`), so runs survive crashes and per-world relaunches.
 
 ## Layout
 
 ```
 RAMET/
-├── .hemtt/hooks/        # post_build bundles $FLATDEVIL$, ramet/, ocap_renderterrain/, DLLs into @root_amet
-├── addons/              # ALL addons, prefixed z\root_amet\addons\<name>:
-│                        #   main, grad_meh_main, grad_meh_ui, ocap_exporter, ocap_ui,
-│                        #   a3me_main, a3me_exporter, intercept_core (vendored, RAMET-patched)
-├── include/             # x\cba\... include tree (a3me script_macros dependency)
-├── vendor/intercept/    # intercept_x64.dll
-├── modules/$FLATDEVIL$  # marker so FlatDevil adds `ramet` to sys.path
-├── ramet/               # Python module exposed via FlatDevil (bulk / stage / ingame)
-├── tools/                # Post-processing: orchestrate, slice_svg, geojson_to_pmtiles,
-│                         #   merge_outputs, optimize_tiles, verify, deploy_to_planner
-├── batch/                # Operator runbook (.bat/.sh) + worlds.txt
-├── subprojects/          # NATIVE SOURCE ONLY: grad_meh (CMake/Conan/Rust), ocap-renderterrain
-│                         #   (Go exporter + Docker context), arma3MapExporter (C# solution)
-│                         #   — bundled whole into @root_amet via .hemtt/project.toml
-│                         #   [files].include ("subprojects/**"), so the release zip is a
-│                         #   genuine all-in-one: ready mod + everything needed to rebuild
-│                         #   any native DLL from scratch
-├── docs/                 # SCHEMA.md, BULK_EXPORT.md
-├── output/               # Generated for reference/dev runs (`--from-reference`)
-├── ramet_output/         # Generated in the Arma 3 root; pushed to the planner by step 4
-└── reference_files/      # Read-only sample data (do not modify)
+├── addons/          # All addons (prefix z\root_amet\addons\<name>): main, grad_meh_main/ui,
+│                    # ocap_exporter/ui, a3me_main/exporter, intercept_core
+├── include/         # x\cba\... include tree (a3me script_macros dependency)
+├── vendor/intercept/ # intercept_x64.dll
+├── modules/$FLATDEVIL$ # FlatDevil marker (adds ramet/ to sys.path)
+├── ramet/           # Python module exposed via FlatDevil (bulk / stage / ingame)
+├── tools/           # Post-processing: orchestrate, merge_outputs, geojson_to_pmtiles,
+│                    # optimize_tiles, verify, deploy_to_planner
+├── batch/           # Operator runbook (.bat/.sh) + worlds.txt
+├── subprojects/     # Native source: grad_meh, ocap-renderterrain, arma3MapExporter —
+│                    # bundled whole into @root_amet (see .hemtt/project.toml), so the
+│                    # release zip is a genuine all-in-one: ready mod + rebuildable source
+├── docs/            # SCHEMA.md, BULK_EXPORT.md
+├── output/          # Generated for reference/dev runs (--from-reference)
+├── ramet_output/    # Generated in the Arma 3 root; pushed to the planner by step 4
+└── reference_files/ # Read-only sample data — never modified
 ```
+
+`.hemtt/hooks/post_build` stages the FlatDevil marker, `ramet/`, the ocap-renderterrain Docker context, `docs/`/`tools/`/`batch/`, and the native DLLs into `@root_amet`.
 
 ## Dependencies
 
-### Windows release build (primary, fully supported)
+### Windows (primary)
 
-Required to produce all three build-here native DLLs in the release zip:
+- Windows 10/11, HEMTT on `PATH`, Docker Desktop
+- Visual Studio 2022 (Desktop C++ workload, MSVC v143, Windows SDK) + `VsDevCmd.bat` (auto-discovered, or set `RAMET_VSDEVCMD`)
+- .NET 10 SDK; Conan 2.x, CMake 3.28+, Ninja, Rust (`cargo`) for `grad_meh`; Go for `ocap_exporter`
+- Python 3.10+ for the host-side deploy/zip helpers
 
-- Windows 10/11
-- HEMTT on `PATH`
-- Docker Desktop
-- Visual Studio 2022 with the Desktop development workload, MSVC v143, and the Windows SDK
-- `VsDevCmd.bat` discoverable by `release.ps1` or provided via `RAMET_VSDEVCMD`
-- `.NET 10 SDK`
-- Conan 2.x, CMake 3.28+, Ninja, and a Rust toolchain (`cargo`) for `grad_meh`
-- A Go toolchain (`go`) for `ocap_exporter`
-- A system Python 3.10+ install if you also use the host-side deploy/zip helpers
+### Linux (secondary — steps 3-5, plus optional ocap_exporter cross-build)
 
-### Linux support (secondary — steps 3-5 only, plus optional ocap_exporter cross-build)
+`grad_meh_x64.dll` and `MapExportExtension_x64.dll` can't be built on Linux — `arma3MapExporter`'s aerial capture is Windows GDI screen-capture, and `grad_meh`'s Conan dependency graph (GDAL/PCL/OpenImageIO/Boost) has no MinGW binaries. Since Arma 3 on Linux runs through Proton (the same Windows `.dll`, unmodified), there's no separate Linux artifact to build for either regardless — `release.sh` always treats them as prebuilt.
 
-`grad_meh_x64.dll` and `MapExportExtension_x64.dll` require a Windows toolchain
-(MSVC / .NET NativeAOT) and cannot be built on Linux — not because of missing tooling, but
-because arma3MapExporter's aerial capture is Windows GDI screen-capture and grad_meh's Conan
-dependency graph (GDAL/PCL/OpenImageIO/Boost) has no MinGW binaries. Arma 3 on Linux runs through
-Proton, which loads the same Windows `.dll` unmodified — there's no separate Linux artifact to
-build for either of these regardless. `release.sh` always treats them as prebuilt; put them at
-`subprojects/grad_meh/build/lib64/grad_meh_x64.dll` and
-`subprojects/arma3MapExporter/publish/MapExportExtension_x64.dll` if you want them in the zip.
+`ocap_exporter_x64.dll` is the exception: it genuinely cross-compiles from Linux via MinGW-w64.
 
-`ocap_exporter_x64.dll` (Go, `-buildmode=c-shared`) is the exception — it genuinely cross-compiles
-from Linux via MinGW-w64, still producing a `.dll` for Intercept to load under Proton:
-
-- Linux x86_64
-- `bash`
-- HEMTT on `PATH`
-- Docker Engine (or equivalent) for the post-processing scripts
-- `go` + `mingw-w64` (`x86_64-w64-mingw32-gcc`, `i686-w64-mingw32-gcc`) if you want
-  `ocap_exporter_x64.dll` rebuilt; otherwise pass `--skip-subprojects` to package without it
+- Linux x86_64, `bash`, HEMTT on `PATH`, Docker Engine
+- `go` + `mingw-w64` (`x86_64-w64-mingw32-gcc`, `i686-w64-mingw32-gcc`) to rebuild `ocap_exporter_x64.dll` — or pass `--skip-subprojects` to package without it
 - Python 3.10+ for the deploy helpers
 
-`batch/03_postprocess.sh`, `04_deploy.sh`, and `05_zip_for_upload.sh` are native bash
-reimplementations of the matching `.bat` files (not cmd.exe wrappers) — they run the same Docker
-and Python calls directly, so they work on a real Linux box, not just WSL. `01`/`02` (in-game
-export) have no Linux path: they launch the Arma client directly, and Proton doesn't change that.
+`batch/03_postprocess.sh`, `04_deploy.sh`, `05_zip_for_upload.sh` are native bash reimplementations (not cmd.exe wrappers) — real Linux, WSL, and Git Bash all work equally. `01`/`02` have no Linux path.
 
 ### Runtime and export
 
-- Arma 3 installed through Steam betas (native Windows, or Linux via Proton) for the actual game/export runtime
-- `@root_amet` and `@CBA_A3` present in the Arma 3 root
-- `flatdevil_x64.dll` from [FlatDevil](github.com/A3-Root/FlatDevil) in the Arma 3 root
-- System Python 3.7+ for FlatDevil runtime discovery
-- Docker running for `batch\03_postprocess.bat` / `batch/03_postprocess.sh`
+- Arma 3 (native Windows, or Linux via Proton) with `@root_amet` + `@CBA_A3` in the Arma 3 root
+- `flatdevil_x64.dll` ([FlatDevil](github.com/A3-Root/FlatDevil)) in the Arma 3 root, system Python 3.7+ for its runtime discovery
+- Docker running for the post-process step
 
 ### Post-processing image
 
-- `ramet-postprocess` is built from `tools/Dockerfile` and bundles tippecanoe, pmtiles CLI, cwebp, pngquant, oxipng, Python 3.12, and the Python libraries required by `tools/orchestrate.py`
-- `ocap-renderterrain` is the render image built by `@root_amet\ocap_renderterrain_process.bat` / `ocap_renderterrain_process.sh`
+- `ramet-postprocess` (`tools/Dockerfile`): tippecanoe, pmtiles CLI, cwebp, pngquant, oxipng, Python 3.12 + `tools/orchestrate.py` deps
+- `ocap-renderterrain`: built by `ocap_renderterrain_process.bat` / `.sh`
 
 ## Docs
 
-- **`docs/BULK_EXPORT.md`** — full operator runbook (prereqs, troubleshooting, partial-output handling)
-- **`docs/SCHEMA.md`** — `map.json` (`ramet-1`) reference
+- **[`docs/BULK_EXPORT.md`](docs/BULK_EXPORT.md)** — full operator runbook (prereqs, troubleshooting, partial-output handling)
+- **[`docs/SCHEMA.md`](docs/SCHEMA.md)** — `map.json` (`ramet-1`) reference
+
+## License
+
+[APL-SA](LICENSE) (Arma Public License Share Alike) — see [`LICENSE`](LICENSE) for full terms and third-party notices.
