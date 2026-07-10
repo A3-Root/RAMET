@@ -9,12 +9,10 @@ private _exportHouses = cbChecked (_display displayCtrl IDC_CONFIG_CHECK_HOUSES)
 private _exportPreviewImg = cbChecked (_display displayCtrl IDC_CONFIG_CHECK_PREVIEW);
 private _exportMeta = cbChecked (_display displayCtrl IDC_CONFIG_CHECK_META);
 private _exportDem = cbChecked (_display displayCtrl IDC_CONFIG_CHECK_DEM);
-private _processDockerInGame = cbChecked (_display displayCtrl IDC_CONFIG_CHECK_DOCKER);
 
 private _sourceOptions = [_exportSat, _exportTopo, _exportBakedTopo, _exportHouses, _exportPreviewImg, _exportMeta, _exportDem];
-private _options = _sourceOptions + [_processDockerInGame];
 
-uiNamespace setVariable ["ocap_renderterrain_options", _options];
+uiNamespace setVariable ["ocap_renderterrain_options", _sourceOptions];
 
 if (_exitCode isEqualTo 1) then {
 	// user pressed ok
@@ -32,8 +30,7 @@ if (_exitCode isEqualTo 1) then {
 			_exportHouses,
 			_exportPreviewImg,
 			_exportMeta,
-			_exportDem,
-			_processDockerInGame
+			_exportDem
 		] call (uiNamespace getVariable "ocap_renderterrain_fnc_export");
 	};
 

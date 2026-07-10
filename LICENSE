@@ -1,50 +1,41 @@
-The combined project is distributed under the GNU General Public License v3 (or any later version).
+The combined project is distributed under the Arma Public License Share Alike (APL-SA).
 
 ===============================================================================
-PROJECT LICENSE (GNU General Public License v3)
+PROJECT LICENSE (Arma Public License Share Alike - APL-SA)
 ===============================================================================
 Copyright (C) 2026 A3-Root (aka xMidnightSnowx) (xmidnightsnowx@pm.me)
 
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+With this licence you are free to adapt (i.e. modify, rework or update) and 
+share (i.e. copy, distribute or transmit) the material under the following conditions:
 
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-GNU General Public License for more details.
+- Attribution: You must attribute the material in the manner specified by the 
+  author or licensor (but not in any way that suggests that they endorse you 
+  or your use of the material).
+- Noncommercial: You may not use this material for any commercial purposes.
+- Arma Only: You may not convert or adapt this material to be used in other 
+  games than Arma.
+- Share Alike: If you adapt, or build upon this material, you may distribute 
+  the resulting material only under the same license.
 
-You should have received a copy of the GNU General Public License
-along with this program. If not, see <http://www.gnu.org/licenses/>.
+Full license text and legal provisions can be found at: 
+https://www.bohemia.net/community/licenses/arma-public-license-share-alike
 
 ===============================================================================
 ORIGINAL COMPONENTS & THIRD-PARTY NOTICES
 ===============================================================================
 
-1. MODIFIED GPLv3 COMPONENTS
------------------------------
-Portions of this software are modified from the OCAP project by Jamie Goodson.
-Original Notice:
-Copyright (C) 2016 Jamie Goodson (aka MisterGoodson) (goodsonjamie@yahoo.co.uk)
+1. APL-SA LICENSED COMPONENTS (SHARE-ALIKE REQUIREMENT)
+-------------------------------------------------------
+This project incorporates components licensed under the APL-SA. Due to the 
+Share Alike provisions, the combined project is distributed under the same terms:
+- Copyright (C) 2023 IndigoFox (indigo@indigofox.dev)
 
-References to "this program" include all files, folders, and subfolders
-bundled with this license file.
+2. STANDALONE MIT LICENSED COMPONENTS
+-------------------------------------------------------
+The following external components are originally licensed under the MIT License. 
+They are fully compatible with permissive reuse and are included here under 
+the combined APL-SA project distribution:
 
-2. OCAP MIT-LICENSED SUB-MODULES
------------------------------
-The following sub-modules from the original OCAP project were originally licensed 
-under the MIT License by their respective authors. They have been modified to 
-work within this environment and are included under GPLv3 compatibility terms:
-
-- addon (Copyright (C) 2016 Jamie Goodson (aka MisterGoodson) (goodsonjamie@yahoo.co.uk))
-- extension (Copyright (C) 2021 OCAP2 Contributors)
-- web (Copyright (C) 2021 OCAP2 Contributors)
-
-3. STANDALONE MIT LICENSED COMPONENTS
-------------------------------------------------------------------
-The following external components are originally licensed under the MIT License 
-and are included here under the terms of the GPLv3 compatibility:
-
+- Intercept (Copyright (C) 2016 International Development and Integration Systems, LLC (IDI-Systems) for Intercept)
 - Grad_Meh (Copyright (C) 2020 Gruppe Adler)
 - GameMapStorage (Copyright (C) 2024 Julien Etelain)

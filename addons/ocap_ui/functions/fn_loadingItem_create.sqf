@@ -23,8 +23,7 @@ params ["_display", "_parentGrp", "_worldName"];
 
 private _STEPS = [
 	["load_world", IDC_LOADINGITEM_STEP_READWRP],
-	["export_source", IDC_LOADINGITEM_STEP_SATIMAGE],
-	["process_docker", IDC_LOADINGITEM_STEP_TOPOIMAGE]
+	["export_source", IDC_LOADINGITEM_STEP_SATIMAGE]
 ];
 
 private _displayName = [(configFile >> "CfgWorlds" >> _worldName), "description", ""] call (uiNamespace getVariable "BIS_fnc_returnConfigEntry");

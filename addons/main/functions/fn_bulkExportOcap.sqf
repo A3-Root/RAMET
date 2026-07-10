@@ -39,15 +39,6 @@ private _log = {
     diag_log text format ["[RAMET ocap] %1", _msg];
 };
 
-private _kickDocker = {
-    params ["_world"];
-    // fire-and-forget — the python side threads the work and returns immediately
-    private _r = ["ramet.kickoff.run_docker", [_world]] call ramet_fnc_fdCall;
-    if !(_r select 0) then {
-        diag_log text format ["[RAMET ocap] ERROR run_docker %1: %2", _world, _r];
-    };
-};
-
 [format ["bulk ocap export starting (worldName=%1)", worldName]] call _log;
 
 if !([] call ramet_fnc_isDiagBuild) exitWith {
@@ -69,7 +60,6 @@ while {true} do {
         [] call ocap_renderterrain_fnc_exportCurrentWorld;
         waitUntil { sleep 2; missionNamespace getVariable ["ocap_exporter_done", false] };
 
-        [_world] call _kickDocker;
         [_world, true, ""] call _markDone;
         [format ["finished %1", _world]] call _log;
     };

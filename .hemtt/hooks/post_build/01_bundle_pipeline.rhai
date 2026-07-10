@@ -1,8 +1,9 @@
 // RAMET post_build: stage everything that ships INSIDE @root_amet but isn't
-// a PBO — the FlatDevil marker, the ramet/ + ocap_renderterrain python
-// packages, the ocap docker context + process bat, docs/tools/batch, and
-// the four native DLLs. HEMTT_OUT is @root_amet/ itself: everything written
-// here ends up inside the produced zip.
+// a PBO — the FlatDevil marker, the ramet/ python package, the ocap docker
+// context + process launcher, docs/tools/batch, and the four native DLLs.
+// HEMTT_OUT is @root_amet/ itself: everything written here ends up inside
+// the produced zip. There is no in-game Docker trigger anymore — post-
+// processing only ever runs via batch\03_postprocess.bat / .sh.
 //
 // Missing DLLs (native chain not built this session) are warned, not fatal —
 // `hemtt check`/`hemtt build` must still succeed for SQF-only iteration.
@@ -24,16 +25,9 @@ if ramet_src.exists() {
     ramet_src.copy(out.join("ramet"));
 }
 
-// ocap_renderterrain python package: FlatDevil module (modules/ocap_renderterrain)
-// merged with its docker context (subprojects/ocap-renderterrain/ocap-renderterrain)
-// — same merge the old ocap subproject post_build hook performed.
+// ocap-renderterrain docker context — copied to a top-level ocap_renderterrain/
+// folder (alongside the process launcher below) for batch\03_postprocess to find.
 let ocap_pkg_out = out.join("ocap_renderterrain");
-let ocap_module_src = rfs.join("modules").join("ocap_renderterrain");
-if ocap_module_src.exists() {
-    ocap_module_src.copy(ocap_pkg_out);
-} else {
-    print("[RAMET post_build] WARN: modules/ocap_renderterrain missing");
-}
 let ocap_docker_src = rfs.join("subprojects").join("ocap-renderterrain").join("ocap-renderterrain");
 if ocap_docker_src.exists() {
     ocap_docker_src.copy(ocap_pkg_out);
@@ -41,12 +35,18 @@ if ocap_docker_src.exists() {
     print("[RAMET post_build] WARN: subprojects/ocap-renderterrain/ocap-renderterrain (docker context) missing");
 }
 
-// ocap_renderterrain_process.bat — sits next to ocap_renderterrain/ at @root_amet root
+// ocap_renderterrain_process.bat/.sh — sit next to ocap_renderterrain/ at @root_amet root
 let ocap_bat_src = rfs.join("subprojects").join("ocap-renderterrain").join("ocap_renderterrain_process.bat");
 if ocap_bat_src.exists() {
     ocap_bat_src.copy(out.join("ocap_renderterrain_process.bat"));
 } else {
     print("[RAMET post_build] WARN: ocap_renderterrain_process.bat missing");
+}
+let ocap_sh_src = rfs.join("subprojects").join("ocap-renderterrain").join("ocap_renderterrain_process.sh");
+if ocap_sh_src.exists() {
+    ocap_sh_src.copy(out.join("ocap_renderterrain_process.sh"));
+} else {
+    print("[RAMET post_build] WARN: ocap_renderterrain_process.sh missing");
 }
 
 // docs ride along with @root_amet
@@ -66,6 +66,10 @@ let batch_src = rfs.join("batch");
 if batch_src.exists() {
     batch_src.copy(out.join("batch"));
 }
+
+// subprojects/ native source is bundled via .hemtt/project.toml [files].include
+// ("subprojects/**") instead of here — that's HEMTT's native mechanism for loose,
+// non-PBO directories and keeps this hook focused on generated/merged content.
 
 // Native DLLs — grad_meh ships at @root_amet root AND under intercept/ (Intercept
 // scans <mod>/intercept/*.dll for plugins to load).

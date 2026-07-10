@@ -2,9 +2,13 @@
 # RAMET release wrapper for Linux.
 #
 # Packages the repo with HEMTT and keeps the same release output layout as
-# release.ps1. The native DLL builds are Windows-only in this repo, so this
-# script treats them as prebuilt artifacts: pass --skip-subprojects if you only
-# want to package existing outputs.
+# release.ps1. grad_meh and arma3MapExporter DLL builds require a Windows
+# toolchain (MSVC/NativeAOT) and are always treated as prebuilt artifacts here
+# — Proton loads the same Windows .dll unmodified, there is no Linux-native
+# equivalent to build. ocap_exporter (Go) genuinely cross-compiles from Linux
+# via MinGW-w64 (see subprojects/ocap-renderterrain/ocap-exporter/build.sh) and
+# is rebuilt automatically when the toolchain is present. Pass
+# --skip-subprojects to package existing outputs only.
 
 set -euo pipefail
 
@@ -20,12 +24,18 @@ usage() {
     cat <<'EOF'
 Usage: ./release.sh [--skip-subprojects] [--clean] [--rebuild-grad-meh-dll]
 
-  --skip-subprojects       Skip native DLL checks and package existing outputs.
+  --skip-subprojects       Skip the ocap_exporter DLL cross-build and package existing outputs.
   --clean                  Force the default clean pass on.
   --no-clean               Skip the default clean pass.
-  --rebuild-grad-meh-dll   Keep the default grad_meh rebuild requirement on.
+  --rebuild-grad-meh-dll   No-op on Linux (kept for CLI parity with release.ps1) — grad_meh
+                           always requires the Windows toolchain and is never rebuilt here.
   --no-rebuild-grad-meh-dll
-                           Skip the default grad_meh rebuild requirement.
+                           Same as above; accepted but has no effect on Linux.
+
+grad_meh_x64.dll and MapExportExtension_x64.dll always require a Windows toolchain
+(MSVC / NativeAOT) and are packaged as prebuilt artifacts if present. ocap_exporter_x64.dll
+cross-compiles from Linux via mingw-w64 (see subprojects/ocap-renderterrain/ocap-exporter/build.sh)
+and is rebuilt automatically unless --skip-subprojects is passed.
 EOF
 }
 
@@ -57,6 +67,10 @@ a3me_dll() {
     find_file "subprojects/arma3MapExporter/publish/MapExportExtension_x64.dll"
 }
 
+ocap_exporter_dll() {
+    find_file "subprojects/ocap-renderterrain/ocap-exporter/ocap_exporter_x64.dll"
+}
+
 preflight_report() {
     local -a issues=()
     local -a notes=()
@@ -69,8 +83,10 @@ preflight_report() {
 
     local grad_dll
     local a3me_dll_path
+    local ocap_dll_path
     grad_dll="$(grad_meh_dll || true)"
     a3me_dll_path="$(a3me_dll || true)"
+    ocap_dll_path="$(ocap_exporter_dll || true)"
 
     if have_cmd docker; then
         if ! docker info >/dev/null 2>&1; then
@@ -87,14 +103,16 @@ preflight_report() {
     check_path "batch/01_export_grad_meh.bat" "grad_meh batch wrapper" issues
     check_path "batch/02_export_ocap.bat" "ocap batch wrapper" issues
     check_path "batch/03_postprocess.bat" "post-process batch wrapper" issues
+    check_path "batch/03_postprocess.sh" "post-process shell wrapper" issues
     check_path "batch/04_deploy.bat" "deploy batch wrapper" issues
+    check_path "batch/04_deploy.sh" "deploy shell wrapper" issues
     check_path "batch/05_zip_for_upload.bat" "zip batch wrapper" issues
+    check_path "batch/05_zip_for_upload.sh" "zip shell wrapper" issues
     check_path "batch/build_grad_meh.bat" "grad_meh build helper" issues
     check_path "batch/worlds.txt" "world queue file" issues
     check_path "batch/render_worlds.txt" "render filter file" issues
     check_path "ramet" "ramet Python package" issues
     check_path "modules/\$FLATDEVIL\$" "FlatDevil marker" issues
-    check_path "modules/ocap_renderterrain" "ocap_renderterrain Python package" issues
     check_path "addons/main" "main addon" issues
     check_path "addons/grad_meh_main" "grad_meh main addon" issues
     check_path "addons/grad_meh_ui" "grad_meh UI addon" issues
@@ -110,44 +128,39 @@ preflight_report() {
     check_path "subprojects/grad_meh/conan.lock" "grad_meh Conan lockfile" issues
     check_path "subprojects/arma3MapExporter/MapExportExtension/MapExportExtension.csproj" "arma3MapExporter project" issues
     check_path "subprojects/ocap-renderterrain/ocap-exporter/go.mod" "ocap exporter module" issues
+    check_path "subprojects/ocap-renderterrain/ocap-exporter/build.sh" "ocap exporter cross-build script" issues
     check_path "subprojects/ocap-renderterrain/ocap-renderterrain/Dockerfile" "ocap render Dockerfile" issues
-    check_path "subprojects/ocap-renderterrain/ocap_renderterrain_process.bat" "ocap render launcher" issues
+    check_path "subprojects/ocap-renderterrain/ocap_renderterrain_process.sh" "ocap render launcher" issues
 
-    if [[ "$SKIP_SUBPROJECTS" -eq 1 ]]; then
-        notes+=("Skipping native DLL rebuilds by request.")
-        for cmd in cmake conan ninja cargo dotnet; do
-            if ! have_cmd "$cmd"; then
-                notes+=("Required command '$cmd' is missing, but native rebuilds are skipped.")
-            fi
-        done
-        if [[ -n "$grad_dll" ]]; then
-            notes+=("Found grad_meh_x64.dll at '$grad_dll'.")
-        else
-            notes+=("grad_meh_x64.dll is missing; HEMTT will package without it and emit a warning.")
-        fi
-        if [[ -n "$a3me_dll_path" ]]; then
-            notes+=("Found MapExportExtension_x64.dll at '$a3me_dll_path'.")
-        else
-            notes+=("MapExportExtension_x64.dll is missing; HEMTT will package without it and emit a warning.")
-        fi
+    # grad_meh and arma3MapExporter DLLs require a Windows toolchain (MSVC/NativeAOT) that
+    # doesn't exist on Linux — always treated as prebuilt here, never rebuilt, never blocking.
+    if [[ -n "$grad_dll" ]]; then
+        notes+=("Found grad_meh_x64.dll at '$grad_dll'.")
     else
-        if [[ "$REBUILD_GRAD_MEH_DLL" -eq 1 || -z "$grad_dll" ]]; then
-            notes+=("grad_meh_x64.dll will be rebuilt from source if the Windows toolchain is available.")
-        fi
-        if [[ -z "$a3me_dll_path" ]]; then
-            notes+=("MapExportExtension_x64.dll will be rebuilt from source if the Windows toolchain is available.")
-        fi
+        notes+=("grad_meh_x64.dll is missing; it requires a Windows toolchain to build (see release.ps1). HEMTT will package without it and emit a warning.")
+    fi
+    if [[ -n "$a3me_dll_path" ]]; then
+        notes+=("Found MapExportExtension_x64.dll at '$a3me_dll_path'.")
+    else
+        notes+=("MapExportExtension_x64.dll is missing; it requires a Windows toolchain to build (see release.ps1). HEMTT will package without it and emit a warning.")
+    fi
+    if [[ "$REBUILD_GRAD_MEH_DLL" -eq 1 ]]; then
+        notes+=("--rebuild-grad-meh-dll has no effect on Linux — grad_meh always requires the Windows toolchain.")
     fi
 
-    if [[ "$SKIP_SUBPROJECTS" -eq 0 ]]; then
-        for cmd in conan cmake ninja cargo dotnet; do
+    if [[ "$SKIP_SUBPROJECTS" -eq 1 ]]; then
+        notes+=("Skipping ocap_exporter DLL rebuild by request.")
+        if [[ -n "$ocap_dll_path" ]]; then
+            notes+=("Found ocap_exporter_x64.dll at '$ocap_dll_path'.")
+        else
+            notes+=("ocap_exporter_x64.dll is missing; HEMTT will package without it and emit a warning.")
+        fi
+    else
+        for cmd in go x86_64-w64-mingw32-gcc i686-w64-mingw32-gcc; do
             if ! have_cmd "$cmd"; then
-                issues+=("Required command '$cmd' is missing for the native DLL build chain.")
+                issues+=("Required command '$cmd' is missing for the ocap_exporter cross-build (mingw-w64 + go).")
             fi
         done
-        if ! have_cmd bash; then
-            issues+=("Required command 'bash' is missing for the grad_meh versioning step.")
-        fi
     fi
 
     echo "=== preflight ==="
@@ -201,19 +214,20 @@ preflight_report
 
 if [[ "$CLEAN" -eq 1 ]]; then
     rm -rf ".hemttout" "releases"
-    if [[ "$SKIP_SUBPROJECTS" -eq 0 ]]; then
-        rm -rf "subprojects/arma3MapExporter/publish"
-    fi
+    # arma3MapExporter/publish and grad_meh's build/ are never wiped here — this script
+    # never rebuilds them (Windows-toolchain-only), so any prebuilt DLL placed there is
+    # the user's input to package, not a stale artifact to clean.
 fi
 
+echo "=== grad_meh_x64.dll / MapExportExtension_x64.dll: always prebuilt on Linux (Windows toolchain required, see release.ps1) ==="
+
 if [[ "$SKIP_SUBPROJECTS" -eq 0 ]]; then
-    if [[ "$REBUILD_GRAD_MEH_DLL" -eq 1 ]]; then
-        echo "grad_meh rebuild is not supported on Linux in this repo." >&2
-        exit 1
+    echo "=== cross-compiling ocap_exporter_x64.dll (go + mingw-w64) ==="
+    if ! ./subprojects/ocap-renderterrain/ocap-exporter/build.sh; then
+        echo "[WARN] ocap_exporter cross-build failed — packaging without it." >&2
     fi
-    echo "=== using prebuilt native DLLs ==="
 else
-    echo "=== packaging without native DLL builds ==="
+    echo "=== packaging without rebuilding ocap_exporter_x64.dll ==="
 fi
 
 echo "=== building RAMET ==="

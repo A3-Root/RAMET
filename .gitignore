@@ -66,6 +66,7 @@ subprojects/grad_meh/install/bin
 !subprojects/*/intercept/
 !subprojects/*/intercept/tools/
 !subprojects/*/intercept/rv/
+!.github/PULL_REQUEST_TEMPLATE.md
 
 # =========================
 # Explicit File Whitelists

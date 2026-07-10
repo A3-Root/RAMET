@@ -1,9 +1,10 @@
 # RAMET release wrapper.
 # Builds the native DLL chains (grad_meh Conan/CMake/Ninja, arma3MapExporter dotnet AOT
-# publish), then runs a single `hemtt check` + `hemtt release` at the repo root.
-# @root_amet is the only mod produced — its post_build hook stages the FlatDevil
-# marker, ramet/ + ocap_renderterrain python packages, docs/tools/batch, and all
-# four native DLLs into the PBO output. releases\root_amet-{ver}.zip is the deliverable.
+# publish, ocap_exporter go build), then runs a single `hemtt check` + `hemtt release`
+# at the repo root. @root_amet is the only mod produced — its post_build hook stages the
+# FlatDevil marker, ramet/ python package, docs/tools/batch, and
+# all four native DLLs (three built here, plus the vendored intercept_x64.dll) into the
+# PBO output. releases\root_amet-{ver}.zip is the deliverable.
 
 [CmdletBinding()]
 param(
@@ -95,6 +96,13 @@ function Find-A3meDll {
     return $null
 }
 
+function Find-OcapExporterDll {
+    param([string]$Repo)
+    $dll = Join-Path $Repo "ocap_exporter_x64.dll"
+    if (Test-Path $dll) { return $dll }
+    return $null
+}
+
 function Write-PreflightReport {
     param(
         [string]$ResolvedVsDevCmd
@@ -107,6 +115,10 @@ function Write-PreflightReport {
         if (-not (Test-CommandPresent -Name $cmd)) {
             $issues.Add("Required command '$cmd' is not on PATH.")
         }
+    }
+
+    if (-not $SkipSubprojects -and -not (Test-CommandPresent -Name "go")) {
+        $issues.Add("Required command 'go' is missing for ocap_exporter_x64.dll.")
     }
 
     if ($SkipSubprojects) {
@@ -136,14 +148,16 @@ function Write-PreflightReport {
         @("batch\01_export_grad_meh.bat", "grad_meh batch wrapper"),
         @("batch\02_export_ocap.bat", "ocap batch wrapper"),
         @("batch\03_postprocess.bat", "post-process batch wrapper"),
+        @("batch\03_postprocess.sh", "post-process shell wrapper"),
         @("batch\04_deploy.bat", "deploy batch wrapper"),
+        @("batch\04_deploy.sh", "deploy shell wrapper"),
         @("batch\05_zip_for_upload.bat", "zip batch wrapper"),
+        @("batch\05_zip_for_upload.sh", "zip shell wrapper"),
         @("batch\build_grad_meh.bat", "grad_meh build helper"),
         @("batch\worlds.txt", "world queue file"),
         @("batch\render_worlds.txt", "render filter file"),
         @("ramet", "ramet Python package"),
         @('modules\$FLATDEVIL$', "FlatDevil marker"),
-        @("modules\ocap_renderterrain", "ocap_renderterrain Python package"),
         @("addons\main", "main addon"),
         @("addons\grad_meh_main", "grad_meh main addon"),
         @("addons\grad_meh_ui", "grad_meh UI addon"),
@@ -159,8 +173,10 @@ function Write-PreflightReport {
         @("subprojects\grad_meh\conan.lock", "grad_meh Conan lockfile"),
         @("subprojects\arma3MapExporter\MapExportExtension\MapExportExtension.csproj", "arma3MapExporter project"),
         @("subprojects\ocap-renderterrain\ocap-exporter\go.mod", "ocap exporter module"),
+        @("subprojects\ocap-renderterrain\ocap-exporter\build.sh", "ocap exporter cross-build script"),
         @("subprojects\ocap-renderterrain\ocap-renderterrain\Dockerfile", "ocap render Dockerfile"),
-        @("subprojects\ocap-renderterrain\ocap_renderterrain_process.bat", "ocap render launcher")
+        @("subprojects\ocap-renderterrain\ocap_renderterrain_process.bat", "ocap render launcher"),
+        @("subprojects\ocap-renderterrain\ocap_renderterrain_process.sh", "ocap render launcher (shell)")
     )
 
     foreach ($entry in $requiredPaths) {
@@ -178,14 +194,20 @@ function Write-PreflightReport {
         $gradRepo = Join-Path $root "subprojects\grad_meh"
         $a3meRepo = Join-Path $root "subprojects\arma3MapExporter"
 
+        $ocapRepo = Join-Path $root "subprojects\ocap-renderterrain\ocap-exporter"
+
         $gradDll = Find-GradMehDll -Repo $gradRepo
         $a3meDll = Find-A3meDll -Repo $a3meRepo
+        $ocapDll = Find-OcapExporterDll -Repo $ocapRepo
 
         if (-not $gradDll) {
             $notes.Add("grad_meh_x64.dll is missing and will be rebuilt from source.")
         }
         if (-not $a3meDll) {
             $notes.Add("MapExportExtension_x64.dll is missing and will be rebuilt from source.")
+        }
+        if (-not $ocapDll) {
+            $notes.Add("ocap_exporter_x64.dll is missing and will be rebuilt from source.")
         }
 
         if ($RebuildGradMehDll -or -not $gradDll) {
@@ -308,6 +330,32 @@ exit /b 0
     return (Test-Path (Join-Path $publishDir "MapExportExtension_x64.dll"))
 }
 
+function Build-OcapExporterDll {
+    # go build -buildmode=c-shared -> subprojects\ocap-renderterrain\ocap-exporter\ocap_exporter_x64.dll.
+    # Native build on Windows — no cross-compile toolchain needed here (see build.sh for Linux).
+    param([string]$Repo)
+    if (-not (Get-Command go -ErrorAction SilentlyContinue)) {
+        Write-Warning "go not on PATH — ocap_exporter_x64.dll will not be rebuilt."
+        return $false
+    }
+    Push-Location $Repo
+    try {
+        $env:GOARCH = "amd64"
+        $env:CGO_ENABLED = "1"
+        & go build -o ocap_exporter_x64.dll -buildmode=c-shared .
+        $rc = $LASTEXITCODE
+    } finally {
+        Pop-Location
+        Remove-Item Env:\GOARCH -ErrorAction SilentlyContinue
+        Remove-Item Env:\CGO_ENABLED -ErrorAction SilentlyContinue
+    }
+    if ($rc -ne 0) {
+        Write-Warning "go build failed for ocap_exporter (exit $rc)."
+        return $false
+    }
+    return (Test-Path (Join-Path $Repo "ocap_exporter_x64.dll"))
+}
+
 if (-not $SkipSubprojects) {
     $gradRepo = Join-Path $root "subprojects\grad_meh"
     $gradDll = Find-GradMehDll -Repo $gradRepo
@@ -321,6 +369,11 @@ if (-not $SkipSubprojects) {
     Write-Host "=== building arma3MapExporter native DLL (dotnet AOT publish) ===" -ForegroundColor Cyan
     if (-not (Build-Arma3MapExporter -Repo (Join-Path $root "subprojects\arma3MapExporter"))) {
         Write-Warning "arma3MapExporter DLL build failed — @root_amet will bundle without it (in-game export unavailable)."
+    }
+
+    Write-Host "=== building ocap_exporter native DLL (go build) ===" -ForegroundColor Cyan
+    if (-not (Build-OcapExporterDll -Repo (Join-Path $root "subprojects\ocap-renderterrain\ocap-exporter"))) {
+        Write-Warning "ocap_exporter DLL build failed — @root_amet will bundle without it (OCAP batch export unavailable)."
     }
 }
 

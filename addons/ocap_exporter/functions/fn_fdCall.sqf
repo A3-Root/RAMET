@@ -12,7 +12,7 @@
 		                        "decode", "init", "internal")
 
 	Usage:
-		private _r = ["ocap_renderterrain.process_world", ["stratis"]] call ocap_renderterrain_fnc_fdCall;
+		private _r = ["ramet.bulk.next_world", ["ocap"]] call ocap_renderterrain_fnc_fdCall;
 */
 
 params [["_function", "", [""]], ["_args", [], [[]]]];

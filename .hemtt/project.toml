@@ -10,9 +10,12 @@ git_hash = 0
 [files]
 include = [
     "mod.cpp",
-    "README.md",
+    "README*.md",
     "LICENSE",
-    "ramet_logo.paa"
+    "ramet_logo.paa",
+    "release.ps1",
+    "release.sh",
+    "subprojects/**"
 ]
 exclude = [
     ".gitignore",
