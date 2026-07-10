@@ -9,7 +9,7 @@
 .hemttout
 hemtt
 hemtt.exe
-releases/
+releases
 references/
 
 # =========================
@@ -78,6 +78,5 @@ subprojects/grad_meh/install/bin
 !**/unary_definitions.txt
 !**/colorrelief_bk.txt
 !**/CMakeUserPresets.json
-!**/intercept_x64.dll
 !**/armake_w64.exe
 !**/CMakeInclude.txt

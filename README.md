@@ -169,6 +169,8 @@ Windows is the fully supported build and export platform. The complete Windows b
 
 When `release.ps1` starts, it refreshes `PATH` and checks common installation locations before reporting a tool as missing. If Docker Desktop is installed but stopped, the script starts it and waits for the daemon. For supported tools, it offers to install them with `winget`; MSYS2 can install the MinGW-w64 GCC package needed by the OCAP Go/cgo build. HEMTT and Visual Studio still need user-directed installation when they are not found. The script reruns its checks after these repairs.
 
+Every run of `release.ps1` or `release.sh` clears and recreates `release.log` in the repository root. The log contains dependency checks, compiler output, HEMTT output, and the final exit status.
+
 ## Project documentation
 
 - [`docs/BULK_EXPORT.md`](docs/BULK_EXPORT.md) — detailed batch-export runbook

@@ -21,13 +21,40 @@ $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $root
 
-$Clean = -not $NoClean
-if ($PSBoundParameters.ContainsKey("Clean")) { $Clean = $true }
+$logPath = Join-Path $root "release.log"
+Set-Content -Path $logPath -Value "" -Encoding UTF8
+$script:TranscriptActive = $false
+try {
+    Start-Transcript -Path $logPath -Force | Out-Null
+    $script:TranscriptActive = $true
+} catch {
+    Write-Warning "Could not start release transcript at '$logPath': $($_.Exception.Message)"
+}
+trap {
+    Write-Host "=== release failed: $($_.Exception.Message) ===" -ForegroundColor Red
+    if ($script:TranscriptActive) {
+        Stop-Transcript | Out-Null
+        $script:TranscriptActive = $false
+    }
+    throw
+}
 
-$RebuildGradMehDll = -not $NoRebuildGradMehDll
+$Clean = $false
+$RebuildGradMehDll = $false
+
+# A plain ./release.ps1 keeps the historical clean-first behavior. Once the
+# caller supplies any flag, every action must be explicit. In particular,
+# rebuilding Grad Meh must be requested with -RebuildGradMehDll.
+if ($PSBoundParameters.Count -eq 0) {
+    $Clean = $true
+}
+if ($PSBoundParameters.ContainsKey("Clean")) { $Clean = $true }
+if ($NoClean) { $Clean = $false }
 if ($PSBoundParameters.ContainsKey("RebuildGradMehDll")) { $RebuildGradMehDll = $true }
+if ($NoRebuildGradMehDll) { $RebuildGradMehDll = $false }
 
 $CheckArgs = @("check", "-p", "-Lc14", "-e")
+$GradMehDllRelativePath = "build\lib64\grad_meh_x64.dll"
 
 function Resolve-VsDevCmd {
     param([string]$PreferredPath)
@@ -147,7 +174,7 @@ function Invoke-WingetInstall {
         "install", "--id", $Id, "--exact",
         "--accept-source-agreements", "--accept-package-agreements"
     ) + $ExtraArguments
-    & winget @arguments | Out-Host
+    & winget @arguments 2>&1 | Out-Host
     if ($LASTEXITCODE -ne 0) {
         Write-Warning "winget could not install $Name (exit $LASTEXITCODE). Install it manually: $InstallHint"
         return $false
@@ -302,7 +329,7 @@ function Repair-MissingDependencies {
 
 function Find-GradMehDll {
     param([string]$Repo)
-    $dll = Join-Path $Repo "build\lib64\grad_meh_x64.dll"
+    $dll = Join-Path $Repo $GradMehDllRelativePath
     if (Test-Path $dll) { return $dll }
     return $null
 }
@@ -435,7 +462,7 @@ function Write-PreflightReport {
             $notes.Add("ocap_exporter_x64.dll is missing and will be rebuilt from source.")
         }
 
-        if ($RebuildGradMehDll -or -not $gradDll) {
+        if ($RebuildGradMehDll -or (-not $gradDll -and -not $NoRebuildGradMehDll)) {
             foreach ($cmd in @("conan", "cmake", "ninja", "cargo")) {
                 if (-not (Test-CommandPresent -Name $cmd)) {
                     $issues.Add("Required command '$cmd' is missing for grad_meh_x64.dll.")
@@ -482,18 +509,19 @@ if ($Clean) {
 
 function Build-GradMehDll {
     param([string]$Repo)
+    $dll = Join-Path $Repo $GradMehDllRelativePath
     if (-not (Test-Path $VsDevCmd)) {
         Write-Warning "VsDevCmd.bat not found at '$VsDevCmd'. Set -VsDevCmd or env RAMET_VSDEVCMD. Skipping grad_meh DLL build."
         return $false
     }
     # Run the full Conan + CMake chain inside one cmd.exe so VsDevCmd env vars persist.
-    $script = @"
-@echo off
+$script = @"
+@echo on
 call "$VsDevCmd" -arch=x64 -host_arch=x64 -vcvars_ver=$VcVarsVer || exit /b 1
 cd /d "$Repo" || exit /b 1
 if exist build rmdir /s /q build
 conan install . -s build_type=Release --output-folder=build --build=missing -c tools.cmake.cmaketoolchain:generator=Ninja --profile:host=./ci-conan-profile --profile:build=./ci-conan-profile --lockfile=conan.lock || exit /b 1
-if not exist build\ninja-release-win mkdir build\ninja-release-win
+if not exist build mkdir build
 cmake --preset ninja-release-win || exit /b 1
 cmake --build --preset ninja-msvc-release || exit /b 1
 exit /b 0
@@ -502,12 +530,33 @@ exit /b 0
     $bat = "$($tmp.FullName).bat"
     Move-Item -Path $tmp.FullName -Destination $bat -Force
     Set-Content -Path $bat -Value $script -Encoding ASCII
+    Write-Host "  > cmd /c $bat" -ForegroundColor DarkGray
     try {
-        & cmd /c $bat
-        return ($LASTEXITCODE -eq 0)
+        & cmd /c $bat 2>&1 | Out-Host
+        $buildRc = $LASTEXITCODE
     } finally {
         Remove-Item $bat -Force -ErrorAction SilentlyContinue
     }
+
+    if ($buildRc -ne 0) {
+        Write-Warning "Grad Meh build command failed (exit $buildRc). Expected output: $dll."
+        return $false
+    }
+
+    if (-not (Test-Path $dll)) {
+        $alternateDll = Get-ChildItem -Path (Join-Path $Repo "build") -Filter "grad_meh_x64.dll" -File -Recurse -ErrorAction SilentlyContinue |
+            Select-Object -First 1
+        if ($alternateDll) {
+            New-Item -ItemType Directory -Path (Split-Path $dll -Parent) -Force | Out-Null
+            Copy-Item -Path $alternateDll.FullName -Destination $dll -Force
+            Write-Warning "Grad Meh wrote the DLL to '$($alternateDll.FullName)'; copied it to the packaging path '$dll'."
+        } else {
+            Write-Warning "Grad Meh build completed without creating '$dll' or finding grad_meh_x64.dll anywhere under '$Repo\build'. Check the CMake/Ninja output above."
+            return $false
+        }
+    }
+    Write-Host "  created: $dll" -ForegroundColor Green
+    return $true
 }
 
 function Build-Arma3MapExporter {
@@ -547,7 +596,7 @@ exit /b 0
     Move-Item -Path $tmp.FullName -Destination $bat -Force
     Set-Content -Path $bat -Value $publishScript -Encoding ASCII
     try {
-        & cmd /c $bat | Out-Host
+        & cmd /c $bat 2>&1 | Out-Host
         $publishRc = $LASTEXITCODE
     } finally { Remove-Item $bat -Force -ErrorAction SilentlyContinue }
     if ($publishRc -ne 0) {
@@ -574,7 +623,7 @@ function Build-OcapExporterDll {
     try {
         $env:GOARCH = "amd64"
         $env:CGO_ENABLED = "1"
-        & go build -o ocap_exporter_x64.dll -buildmode=c-shared .
+        & go build -o ocap_exporter_x64.dll -buildmode=c-shared . 2>&1 | Out-Host
         $rc = $LASTEXITCODE
     } finally {
         Pop-Location
@@ -596,10 +645,21 @@ function Build-OcapExporterDll {
 if (-not $SkipSubprojects) {
     $gradRepo = Join-Path $root "subprojects\grad_meh"
     $gradDll = Find-GradMehDll -Repo $gradRepo
-    if ($RebuildGradMehDll -or -not $gradDll) {
+    if ($RebuildGradMehDll -or (-not $gradDll -and -not $NoRebuildGradMehDll)) {
         Write-Host "=== building grad_meh native DLL (Conan + CMake + Ninja) ===" -ForegroundColor Cyan
+        if ($RebuildGradMehDll) {
+            Write-Host "  reason: -RebuildGradMehDll was supplied" -ForegroundColor DarkGray
+        } elseif (-not $gradDll) {
+            Write-Host "  reason: grad_meh_x64.dll is missing" -ForegroundColor DarkGray
+        }
         if (-not (Build-GradMehDll -Repo $gradRepo)) {
             throw "grad_meh DLL build failed — re-run with -RebuildGradMehDll or build it manually."
+        }
+    } else {
+        if ($gradDll) {
+            Write-Host "=== grad_meh_x64.dll already exists; skipping native rebuild ===" -ForegroundColor DarkGray
+        } else {
+            Write-Warning "grad_meh_x64.dll is missing, but -NoRebuildGradMehDll was supplied; @root_amet will bundle without Grad Meh."
         }
     }
 
@@ -616,10 +676,10 @@ if (-not $SkipSubprojects) {
 
 Write-Host "=== building RAMET ===" -ForegroundColor Cyan
 Write-Host "  > hemtt $($CheckArgs -join ' ')" -ForegroundColor DarkGray
-& hemtt @CheckArgs
+& hemtt @CheckArgs 2>&1 | Out-Host
 if ($LASTEXITCODE -ne 0) { throw "hemtt check failed (exit $LASTEXITCODE) — release skipped" }
 Write-Host "  > hemtt release" -ForegroundColor DarkGray
-& hemtt release
+& hemtt release 2>&1 | Out-Host
 if ($LASTEXITCODE -ne 0) { throw "hemtt release failed (exit $LASTEXITCODE)" }
 
 $verZip = Get-ChildItem -Path (Join-Path $root "releases") -Filter "root_amet-*.zip" -ErrorAction SilentlyContinue |
@@ -632,4 +692,11 @@ if ($verZip) {
     Write-Host "  $($verZip.FullName)"
 } else {
     Write-Warning "hemtt release completed but no releases\root_amet-*.zip was found."
+}
+
+Write-Host "=== release finished (exit 0) ===" -ForegroundColor Green
+
+if ($script:TranscriptActive) {
+    Stop-Transcript | Out-Null
+    $script:TranscriptActive = $false
 }

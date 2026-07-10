@@ -48,7 +48,7 @@
 #include "findPbos.h"
 #include "SimplePoint.h"
 
-#include "../addons/main/status_codes.hpp"
+#include "../../../addons/grad_meh_main/status_codes.hpp"
 
 using namespace intercept;
 using namespace OIIO;

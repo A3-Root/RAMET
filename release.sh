@@ -15,10 +15,18 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$ROOT"
 
+LOG_PATH="$ROOT/release.log"
+: > "$LOG_PATH"
+exec > >(tee -a "$LOG_PATH") 2>&1
+trap 'status=$?; echo "=== release finished (exit $status) ==="' EXIT
+echo "=== RAMET release started: $(date -u +%Y-%m-%dT%H:%M:%SZ) ==="
+echo "Repository: $ROOT"
+
 CHECK_ARGS=(check -p -Lc14 -e)
 SKIP_SUBPROJECTS=0
 CLEAN=1
 REBUILD_GRAD_MEH_DLL=1
+GRAD_MEH_DLL="subprojects/grad_meh/build/lib64/grad_meh_x64.dll"
 
 usage() {
     cat <<'EOF'
@@ -60,7 +68,7 @@ find_file() {
 }
 
 grad_meh_dll() {
-    find_file "subprojects/grad_meh/build/lib64/grad_meh_x64.dll"
+    find_file "$GRAD_MEH_DLL"
 }
 
 a3me_dll() {
