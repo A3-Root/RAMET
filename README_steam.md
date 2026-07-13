@@ -79,4 +79,4 @@ You can run more than one exporter for the same terrain. Post-processing will us
 [url=https://discord.gg/qQXg8tB7gr][img]https://i.imgur.com/8B7UcQ2.gif[/img][/url]
 
 [hr][h2]License[/h2]
-The combined project is distributed under the [b]Arma Public License Share Alike (APL-SA)[/b]. See [url=https://www.bohemia.net/community/licenses/arma-public-license-share-alike]the full license[/url] and the included [i][b]LICENSE[/b][/i] file for legal terms and third-party notices.
+The combined project is distributed under the [b]MIT License[/b]. See the included [i][b]LICENSE[/b][/i] file for legal terms and third-party notices.

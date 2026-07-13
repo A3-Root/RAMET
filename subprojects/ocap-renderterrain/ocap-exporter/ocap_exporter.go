@@ -135,7 +135,7 @@ func startWriting(worldname string) string {
 
 	// create world subfolder
 	WORLDNAME = fixEscapeQuotes(trimQuotes(worldname))
-\tEXPORT_WORLD_FOLDER = EXPORT_FOLDER + "\\" + WORLDNAME + "\\ocap-rt"
+	EXPORT_WORLD_FOLDER = EXPORT_FOLDER + "\\" + WORLDNAME + "\\ocap-rt"
 	HEIGHTMAP_FILE_PATH = EXPORT_WORLD_FOLDER + "\\" + WORLDNAME + ".asc"
 	HEIGHTMAP_DATA = []string{}
 	HEIGHTMAP_BT_DATA = []string{}
@@ -145,13 +145,13 @@ func startWriting(worldname string) string {
 
 	// create world subfolder
 	_, err = os.Stat(EXPORT_WORLD_FOLDER)
-\tif os.IsNotExist(err) {
-\t\tos.MkdirAll(EXPORT_WORLD_FOLDER, 0755)
+	if os.IsNotExist(err) {
+		os.MkdirAll(EXPORT_WORLD_FOLDER, 0755)
 	} else {
 		// delete existing world subfolder and any contents
 		os.RemoveAll(EXPORT_WORLD_FOLDER)
 		// create world subfolder
-\t\tos.MkdirAll(EXPORT_WORLD_FOLDER, 0755)
+		os.MkdirAll(EXPORT_WORLD_FOLDER, 0755)
 	}
 
 	// define log output
