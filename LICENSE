@@ -1,41 +1,36 @@
-The combined project is distributed under the Arma Public License Share Alike (APL-SA).
+The combined project is distributed under the MIT License.
 
 ===============================================================================
-PROJECT LICENSE (Arma Public License Share Alike - APL-SA)
+PROJECT LICENSE (MIT License)
 ===============================================================================
 Copyright (C) 2026 A3-Root (aka xMidnightSnowx) (xmidnightsnowx@pm.me)
 
-With this licence you are free to adapt (i.e. modify, rework or update) and 
-share (i.e. copy, distribute or transmit) the material under the following conditions:
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
 
-- Attribution: You must attribute the material in the manner specified by the 
-  author or licensor (but not in any way that suggests that they endorse you 
-  or your use of the material).
-- Noncommercial: You may not use this material for any commercial purposes.
-- Arma Only: You may not convert or adapt this material to be used in other 
-  games than Arma.
-- Share Alike: If you adapt, or build upon this material, you may distribute 
-  the resulting material only under the same license.
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
 
-Full license text and legal provisions can be found at: 
-https://www.bohemia.net/community/licenses/arma-public-license-share-alike
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 
 ===============================================================================
 ORIGINAL COMPONENTS & THIRD-PARTY NOTICES
 ===============================================================================
 
-1. APL-SA LICENSED COMPONENTS (SHARE-ALIKE REQUIREMENT)
--------------------------------------------------------
-This project incorporates components licensed under the APL-SA. Due to the 
-Share Alike provisions, the combined project is distributed under the same terms:
-- Copyright (C) 2023 IndigoFox (indigo@indigofox.dev)
+The following external components are originally licensed under the MIT License 
+and are included here under standard MIT terms:
 
-2. STANDALONE MIT LICENSED COMPONENTS
--------------------------------------------------------
-The following external components are originally licensed under the MIT License. 
-They are fully compatible with permissive reuse and are included here under 
-the combined APL-SA project distribution:
-
+- OCAP-RenderTerrain (Copyright (C) 2023 IndigoFox (indigo@indigofox.dev))
 - Intercept (Copyright (C) 2016 International Development and Integration Systems, LLC (IDI-Systems) for Intercept)
 - Grad_Meh (Copyright (C) 2020 Gruppe Adler)
 - GameMapStorage (Copyright (C) 2024 Julien Etelain)
