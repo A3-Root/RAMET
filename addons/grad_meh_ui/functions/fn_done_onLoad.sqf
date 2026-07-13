@@ -1,4 +1,5 @@
 #include "../idcmacros.hpp"
+#include "\z\root_amet\addons\main\script_images.hpp"
 #define LOGS_ARROW "<img image='\a3\ui_f\data\gui\rsc\rscdisplaymultiplayer\arrow_down_ca.paa' />"
 
 params ["_display"];
@@ -18,12 +19,12 @@ if !(isNull _textCtrl) then {
 
 	_textCtrl ctrlSetStructuredText parseText format [
 		"
-<t size='15'><img image='\z\root_amet\addons\main\data\ramet_logo_grad.paa'/></t><br />
+<t size='15'><img image='%4'/></t><br />
 <t size='5'>EXPORT FINISHED</t><br />
 <t color='%1' size='1.2'>with %2 errors</t><br />
 <br /><br /><t size='1.2' color='#AAAAAA'>%3 LOGS %3</t>
 		"
-	, _errorColor, count _errors, LOGS_ARROW];
+	, _errorColor, count _errors, LOGS_ARROW, RAMET_IMG_LOGO_GRAD_MEH];
 };
 
 {

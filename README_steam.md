@@ -6,7 +6,7 @@ RAMET exports Arma 3 terrains into raster and vector map tiles for a web map pla
 [list]
 [*][b]RAMET:[/b] Subscribe to this Workshop item and enable it in the Arma 3 launcher.
 [*][b]CBA:[/b] Subscribe to and enable [url=https://steamcommunity.com/workshop/filedetails/?id=450814997]CBA_A3[/url]. Load it together with RAMET.
-[*][b]FlatDevil:[/b] Download [url=https://github.com/A3-Root/FlatDevil]FlatDevil (Github)[/url] or [url=https://steamcommunity.com/workshop/filedetails/?id=450814997]FlatDevil (Steam Workshop)[/url]. Place [i][b]flatdevil_x64.dll[/b][/i] directly in the Arma 3 installation folder, next to [i][b]arma3_x64.exe[/b][/i], not inside the RAMET folder. Install Python 3.7 or newer and make sure [i][b]python[/b][/i] works in a new terminal.
+[*][b]FlatDevil:[/b] Download and build from [url=https://github.com/A3-Root/FlatDevil]FlatDevil (Github)[/url] or [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3763961285]FlatDevil (Steam Workshop)[/url]. Place the built [i][b]flatdevil_x64.dll[/b][/i] directly in the Arma 3 installation folder, next to [i][b]arma3_x64.exe[/b][/i], not inside the RAMET folder. Install Python 3.7 or newer and make sure [i][b]python[/b][/i] works in a new terminal.
 [*][b]Terrain:[/b] Install or subscribe to the terrain you want to export, along with its required dependencies. Enable the terrain mod in the launcher with RAMET and CBA. A terrain that is only installed but not enabled will not be available to RAMET.[/list]
 To find the Arma 3 installation folder in Steam, right-click [i]Arma 3 → Manage → Browse local files[/i]. After extracting a release, the folder should look like this:
 [code]Arma 3\arma3_x64.exe
