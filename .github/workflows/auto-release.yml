@@ -5,6 +5,9 @@ on:
     branches:
       - master
 
+permissions:
+  contents: write
+
 jobs:
   auto-release:
     if: contains(github.event.head_commit.message, 'RELEASE')
