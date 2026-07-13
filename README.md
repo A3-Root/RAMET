@@ -183,4 +183,4 @@ Every run of `release.ps1` or `release.sh` clears and recreates `release.log` in
 
 ## License
 
-[APL-SA](LICENSE) (Arma Public License Share Alike) — see [`LICENSE`](LICENSE) for the full license and third-party notices.
+[MIT](LICENSE) (MIT LICENSE) — see [`LICENSE`](LICENSE) for the full license and third-party notices.
