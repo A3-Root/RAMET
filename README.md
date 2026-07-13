@@ -6,7 +6,7 @@
 
 <p align="center">
 <!-- RAMET-RELEASE-BADGE:START -->
-<img src="https://img.shields.io/badge/release-v1.5.0.6-blue" alt="release"> <img src="https://img.shields.io/badge/build-passing-brightgreen" alt="build">
+<img src="https://img.shields.io/badge/release-vlatest-blue" alt="release"> <img src="https://img.shields.io/badge/build-passing-brightgreen" alt="build">
 <!-- RAMET-RELEASE-BADGE:END -->
 </p>
 
