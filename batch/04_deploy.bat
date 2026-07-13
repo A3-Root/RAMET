@@ -1,7 +1,7 @@
 @echo off
 setlocal EnableExtensions
 
-rem RAMET step 4 — copy <Arma3>\ramet_output\ into a user-supplied planner map_tiles\ directory.
+rem RAMET step 4 — copy <Arma3>\RAMET_Output\processed\ into a user-supplied planner map_tiles\ directory.
 rem Host Python only (deploy_to_planner.py is stdlib-only — no Docker needed).
 
 set "SCRIPT_DIR=%~dp0"

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# RAMET — pack <Arma3>/ramet_output/{world}/ into per-world zips for SFTP upload
-# to a remote planner. Pass --bundle to emit a single ramet_output_bundle.zip.
+# RAMET — pack <Arma3>/RAMET_Output/processed/{world}/ into per-world zips for SFTP upload
+# to a remote planner. Pass --bundle to emit a single RAMET_Output_bundle.zip.
 # Native bash reimplementation — host Python only (deploy_to_planner.py --zip is
 # stdlib-only). Works on Linux, WSL, and Git Bash.
 
@@ -19,4 +19,4 @@ export RAMET_ARMA_ROOT="$ARMA_ROOT"
 python3 "$RAMET_ROOT/tools/deploy_to_planner.py" --zip "$@"
 
 echo
-echo "Zips ready under \"$ARMA_ROOT/ramet_output/_zips/\""
+echo "Zips ready under \"$ARMA_ROOT/RAMET_Output/_zips/\""

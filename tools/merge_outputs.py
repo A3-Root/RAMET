@@ -1,9 +1,8 @@
-"""Unify grad_meh + ocap-rt outputs into one ramet_output/{world}/ tree.
+"""Unify raw grad_meh + ocap-rt outputs into one processed/{world}/ tree.
 
 Inputs (each may be missing):
-    grad_dir         <Arma3>/grad_meh/{world}/              (sat_full.png, geojsons, dem, meta.json)
-    ocap_raw_dir     <Arma3>/ocap_exporter/{world}/         (raw SVG, ASC heightmap from diag_exportTerrainSVG)
-    ocap_rendered    <Arma3>/ocap_renderterrain_output/{w}/ (Docker-rendered topo pyramids + GeoTIFFs)
+    grad_dir         RAMET_Output/raw/{world}/grad_meh/   (sat_full.png, geojsons, dem, meta.json)
+    ocap_raw_dir     RAMET_Output/raw/{world}/ocap-rt/    (raw SVG, ASC, rendered tiles)
 
 Output: <out_root>/{world}/ structured per docs/SCHEMA.md.
 
@@ -22,7 +21,7 @@ import shutil
 from pathlib import Path
 from typing import Any
 
-# variant subdir name in ocap_renderterrain_output -> canonical id in our manifest
+# Variant subdir names in the OCAP raw stage map to canonical manifest IDs.
 OCAP_VARIANT_DIRS = {
     "topoDark": "topo_dark",
     "topoRelief": "topoRelief",
@@ -89,7 +88,7 @@ def merge_world(world: str,
     # ---- ocap-rt rendered rasters (win on conflict) ----
     if ocap_rendered_dir and ocap_rendered_dir.is_dir():
         sources.append("ocap")
-        # top-level zoom dirs in ocap_renderterrain_output/{world}/ ARE the "topo" pyramid
+        # Top-level zoom dirs in the OCAP raw stage are the "topo" pyramid.
         if _is_zoom_pyramid(ocap_rendered_dir):
             if _copy_pyramid(ocap_rendered_dir, world_out / "tiles" / "topo"):
                 raster_layers.append({

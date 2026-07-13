@@ -103,7 +103,7 @@ namespace MapExportExtension
             {
                 var arma3Root = Path.GetDirectoryName(System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName)
                     ?? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-                _dataPath = Path.Combine(arma3Root, "ramet_ingame_output", _map.MapName);
+                _dataPath = Path.Combine(arma3Root, "RAMET_Output", "raw", _map.MapName, "a3me");
             }
             Directory.CreateDirectory(_dataPath);
             SetStatus(ExportStatus.Running);

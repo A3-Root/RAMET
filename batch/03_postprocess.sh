@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# RAMET step 3 — post-process intermediate exports into <Arma3>/ramet_output/{world}/.
+# RAMET step 3 — post-process raw exports into <Arma3>/RAMET_Output/processed/{world}/.
 #
 # Native bash reimplementation of 03_postprocess.bat — runs directly on Linux, WSL, or
 # Git Bash, no cmd.exe involved. Runs entirely in Docker — no host install of
@@ -89,4 +89,4 @@ docker run --rm \
     -e PYTHONUNBUFFERED=1 \
     ramet-postprocess:latest "${ORCHESTRATE_WORLDS[@]}" --workers 2 --optimize-workers 4
 
-echo "=== done. Output at \"$ARMA_ROOT/ramet_output\". Run 04_deploy.sh to push to planner. ==="
+echo "=== done. Output at \"$ARMA_ROOT/RAMET_Output/processed\". Run 04_deploy.sh to push to planner. ==="

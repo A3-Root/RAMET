@@ -1,8 +1,8 @@
 @echo off
 setlocal EnableExtensions
 
-rem RAMET — pack <Arma3>\ramet_output\{world}\ into per-world zips for SFTP upload
-rem to a remote planner. Pass --bundle to emit a single ramet_output_bundle.zip.
+rem RAMET — pack <Arma3>\RAMET_Output\processed\{world}\ into per-world zips for SFTP upload
+rem to a remote planner. Pass --bundle to emit a single RAMET_Output_bundle.zip.
 rem Host Python only (deploy_to_planner.py --zip is stdlib-only).
 
 set "SCRIPT_DIR=%~dp0"
@@ -22,6 +22,6 @@ python "%RAMET_ROOT%\tools\deploy_to_planner.py" --zip %*
 set "RC=%ERRORLEVEL%"
 
 echo.
-echo Zips ready under "%ARMA_ROOT%\ramet_output\_zips\"
+echo Zips ready under "%ARMA_ROOT%\RAMET_Output\_zips\"
 popd
 endlocal & exit /b %RC%

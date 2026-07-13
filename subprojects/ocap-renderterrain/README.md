@@ -72,7 +72,7 @@ Select maps from the addon UI, or start a bulk export from the debug console:
 The wrapper launches each selected world as a scripted mission and runs the existing OCAP exporter. If `Run Docker render in-game` is checked in the export options, it starts FlatDevil/Docker processing for that world before moving to the next world. Source output is written under the Arma 3 installation directory:
 
 ```text
-ocap_exporter/{worldName}/
+RAMET_Output/raw/{worldName}/ocap-rt/
   {worldName}.asc
   {worldName}.svg
   map.json
@@ -82,7 +82,7 @@ ocap_exporter/{worldName}/
 Rendered output is written under:
 
 ```text
-ocap_renderterrain_output/{worldName}/
+RAMET_Output/raw/{worldName}/ocap-rt/
 ```
 
 If you skip in-game Docker processing from the addon release, run the packaged batch file after export:

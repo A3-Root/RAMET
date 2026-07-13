@@ -122,8 +122,12 @@ else:
 for WORLDNAME_PATH in world_list:
     # define constants
     WORLDNAME = WORLDNAME_PATH.split("/")[-1]
-    INPUT_FOLDER = f"./input/{WORLDNAME}"
-    OUTPUT_FOLDER = f"./output/{WORLDNAME}"
+    input_world_root = os.path.join("./input", WORLDNAME)
+    input_stage_root = os.path.join(input_world_root, "ocap-rt")
+    INPUT_FOLDER = input_stage_root if os.path.isdir(input_stage_root) else input_world_root
+    output_world_root = os.path.join("./output", WORLDNAME)
+    OUTPUT_FOLDER = os.path.join(output_world_root, "ocap-rt") if os.path.isdir(input_stage_root) else output_world_root
+    os.makedirs(OUTPUT_FOLDER, exist_ok=True)
     TEMP_FOLDER = f"./temp/{WORLDNAME}"
 
     _world_t = time.time()

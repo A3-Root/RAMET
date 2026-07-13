@@ -110,7 +110,7 @@ def _check_pmtiles(path: Path) -> list[str]:
 def _check_sat_source(world_dir: Path, arma_root_hint: Path | None) -> list[str]:
     """Warn-only style: emit error if sat_full.png absent/zero, warn if tiny."""
     # We can't always locate the upstream grad_meh/sat_full.png from world_dir alone;
-    # check ramet_output/{world}/source.json for a hint.
+    # check RAMET_Output/processed/{world}/source.json for a hint.
     src_json = world_dir / "source.json"
     if not src_json.exists():
         return []
@@ -181,7 +181,7 @@ def verify_world(world_dir: Path) -> tuple[list[str], list[str]]:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("world_dir", nargs="?", help="ramet_output/<world> dir")
+    ap.add_argument("world_dir", nargs="?", help="RAMET_Output/processed/<world> dir")
     ap.add_argument("--world-dir", dest="wd_flag", help=argparse.SUPPRESS)
     args = ap.parse_args()
     target = args.world_dir or args.wd_flag

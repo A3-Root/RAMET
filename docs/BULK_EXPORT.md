@@ -111,7 +111,7 @@ The script:
 4. creates PMTiles, raster pyramids, SVG layers, and DEM output;
 5. optimizes and verifies the result.
 
-The final world directory is `Arma 3\ramet_output\{world}\`.
+The final world directory is `Arma 3\RAMET_Output\processed\{world}\`.
 
 `batch\render_worlds.txt` limits the worlds processed by the OCAP renderer.
 Use one class name per line. Leave the file empty to process every discovered
@@ -145,7 +145,7 @@ For a remote planner, create per-world archives:
 ```
 
 Use `--bundle` to create one archive. The files go under
-`Arma 3\ramet_output\_zips\`.
+`Arma 3\RAMET_Output\_zips\`.
 
 ## Partial output
 
@@ -175,5 +175,5 @@ wait for the daemon to become ready. The post-processing tools run inside the
 Docker image; they do not need to be installed on the host.
 
 **Deployment skips a world.** Confirm that
-`ramet_output\{world}\map.json` exists and that the planner path points to its
+`RAMET_Output\processed\{world}\map.json` exists and that the planner path points to its
 `map_tiles` directory.

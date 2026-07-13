@@ -77,7 +77,7 @@ This creates the post-processing image, merges the available export data, genera
 The finished output is placed at:
 
 ```text
-Arma 3\ramet_output\{world}\
+Arma 3\RAMET_Output\processed\{world}\
 ```
 
 At this point, the export is complete. To copy it into a local planner, specify the planner's `map_tiles` folder either by editing and executing/running the `@root_amet\batch\04_deploy.bat` file or passing the `--planner-root` flag:
@@ -86,7 +86,7 @@ At this point, the export is complete. To copy it into a local planner, specify 
 @root_amet\batch\04_deploy.bat --planner-root "C:\path\to\your\planner\map_tiles"
 ```
 
-To create uploadable archives instead, run `@root_amet\batch\05_zip_for_upload.bat` (or add `--bundle` for a combined archive). Zips are saved in `ramet_output\_zips\`.
+To create uploadable archives instead, run `@root_amet\batch\05_zip_for_upload.bat` (or add `--bundle` for a combined archive). Zips are saved in `RAMET_Output\_zips\`.
 
 ## Exporting several terrains automatically
 

@@ -1,6 +1,6 @@
 # RAMET `map.json` schema
 
-`ramet_output/{world}/map.json` is written in two stages:
+`RAMET_Output/processed/{world}/map.json` is written in two stages:
 
 - `tools/merge_outputs.py` creates the base manifest from the available source
   directories.
@@ -84,7 +84,7 @@ the imported ocap raster variants keep their camelCase ids (`topoRelief`,
 
 Notes:
 
-- `url` is relative to `ramet_output/{world}/`.
+- `url` is relative to `RAMET_Output/processed/{world}/`.
 - Layer ids map to the grad_meh GeoJSON stems.
 - `category` is one of `transport`, `structure`, `terrain`, `labels`, or
   `other`.
@@ -120,7 +120,7 @@ Companion provenance file:
   "generatedAt": "2026-05-24T13:22:00Z",
   "grad_meh": "/path/to/grad_meh/altis",
   "ocap_raw": "/path/to/ocap_exporter/altis",
-  "ocap_rendered": "/path/to/ocap_renderterrain_output/altis",
+  "ocap_rendered": "/path/to/RAMET_Output/raw/altis/ocap-rt",
   "tool": "ramet.orchestrate"
 }
 ```

@@ -1,12 +1,12 @@
 """Top-level post-processing entry point.
 
-Reads upstream exporter outputs directly from the Arma 3 root:
-    <Arma3>/grad_meh/{world}/
-    <Arma3>/ocap_exporter/{world}/              (raw SVG + ASC)
-    <Arma3>/ocap_renderterrain_output/{world}/  (Docker-rendered tile pyramids)
+Reads raw exporter outputs from the Arma 3 root:
+    <Arma3>/RAMET_Output/raw/{world}/grad_meh/
+    <Arma3>/RAMET_Output/raw/{world}/ocap-rt/  (raw SVG + rendered tiles)
+    <Arma3>/RAMET_Output/raw/{world}/a3me/
 
 Writes the unified per-world tree to:
-    <Arma3>/ramet_output/{world}/
+    <Arma3>/RAMET_Output/processed/{world}/
 
 For dev runs (no Arma), pass --from-reference to read inputs out of
 RAMET/reference_files/ and write to RAMET/output/.
@@ -253,7 +253,7 @@ def process_world(world: str,
                     print(f"[orchestrate] {world}: render_topo failed — {exc}")
                     stage_results["render_topo"] = {"ok": False, "reason": "error", "err": str(exc)}
 
-    # --- ingame pyramid from ramet_ingame_output ---
+    # --- ingame pyramid from the raw a3me export ---
     ingame_root = ingame_dir if (ingame_dir and ingame_dir.is_dir()) else None
     if ingame_root and world_size:
         try:
@@ -402,11 +402,9 @@ def _resolve_input_roots(from_reference: bool) -> tuple[Path, Path, Path, Path, 
                 ROOT / "output")
     # Pipeline mode: env override -> Arma 3 root inferred from cwd.
     arma_root = Path(os.environ.get("RAMET_ARMA_ROOT", os.getcwd()))
-    return (arma_root / "grad_meh",
-            arma_root / "ocap_exporter",
-            arma_root / "ocap_renderterrain_output",
-            arma_root / "ramet_ingame_output",
-            arma_root / "ramet_output")
+    raw_root = arma_root / "RAMET_Output" / "raw"
+    return (raw_root, raw_root, raw_root, raw_root,
+            arma_root / "RAMET_Output" / "processed")
 
 
 def _collect_worlds(roots: tuple[Path, ...]) -> list[str]:
@@ -491,7 +489,7 @@ def main() -> int:
                     help="read inputs from reference_files/ and write to RAMET/output/")
     ap.add_argument("--output", help="override output root")
     ap.add_argument("--ingame-only", action="store_true",
-                    help="process only ramet_ingame_output; skip grad_meh/ocap stages")
+                    help="process only raw a3me exports; skip grad_meh/ocap stages")
     ap.add_argument("--skip-pmtiles", action="store_true")
     ap.add_argument("--skip-slice", action="store_true")
     ap.add_argument("--skip-optimize", action="store_true")
@@ -525,7 +523,10 @@ def main() -> int:
     skip_optimize = args.skip_optimize or args.ingame_only
 
     if args.all:
-        target = _collect_worlds((grad_root, ocap_raw_root, ocap_rendered_root, ingame_root))
+        if args.from_reference:
+            target = _collect_worlds((grad_root, ocap_raw_root, ocap_rendered_root, ingame_root))
+        else:
+            target = _collect_worlds((grad_root,))
     else:
         target = args.world
 
@@ -534,15 +535,28 @@ def main() -> int:
         print(f"  looked in: {grad_root}, {ocap_raw_root}, {ocap_rendered_root}, {ingame_root}")
         return 2
 
-    world_args = [
-        (w,
-         None if args.ingame_only else (grad_root / w if (grad_root / w).is_dir() else None),
-         None if args.ingame_only else (ocap_raw_root / w if (ocap_raw_root / w).is_dir() else None),
-         None if args.ingame_only else (ocap_rendered_root / w if (ocap_rendered_root / w).is_dir() else None),
-         ingame_root / w if (ingame_root / w).is_dir() else None,
-         out_root, skip_pmtiles, skip_slice, skip_optimize, args.optimize_workers)
-        for w in target
-    ]
+    world_args = []
+    for w in target:
+        if args.from_reference:
+            grad_dir = grad_root / w
+            ocap_raw_dir = ocap_raw_root / w
+            ocap_rendered_dir = ocap_rendered_root / w
+            ingame_dir = ingame_root / w
+        else:
+            world_raw = grad_root / w
+            grad_dir = world_raw / "grad_meh"
+            ocap_raw_dir = world_raw / "ocap-rt"
+            ocap_rendered_dir = ocap_raw_dir
+            ingame_dir = world_raw / "a3me"
+
+        world_args.append((
+            w,
+            None if args.ingame_only or not grad_dir.is_dir() else grad_dir,
+            None if args.ingame_only or not ocap_raw_dir.is_dir() else ocap_raw_dir,
+            None if args.ingame_only or not ocap_rendered_dir.is_dir() else ocap_rendered_dir,
+            ingame_dir if ingame_dir.is_dir() else None,
+            out_root, skip_pmtiles, skip_slice, skip_optimize, args.optimize_workers,
+        ))
 
     # Pause sentinel: create <Arma3>/ramet.pause on the host to pause between worlds.
     pause_file = out_root.parent / "ramet.pause"

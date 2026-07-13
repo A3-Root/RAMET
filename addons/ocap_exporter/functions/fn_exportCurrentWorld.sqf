@@ -255,7 +255,7 @@ if (isNil "CBA_fnc_encodeJSON") then {
 
     isNil {
         private _svgPath = format[
-            "%1\ocap_exporter\%2\%3.svg",
+            "%1\RAMET_Output\raw\%2\ocap-rt\%3.svg",
             (ocap_exporter_addon callExtension "getDir"),
             toLower worldName,
             toLower worldName

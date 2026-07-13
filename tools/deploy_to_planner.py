@@ -1,7 +1,7 @@
 """Deliver RAMET output to a user-supplied deployment target.
 
 Two modes:
-  --local    copy <ramet_output>/{world}/ into <planner>/map_tiles/{world}/  (default)
+  --local    copy <RAMET_Output/processed>/{world}/ into <planner>/map_tiles/{world}/  (default)
   --zip      pack each world (or one bundle) into a zip for SFTP upload to a remote planner
 
 Both modes are dependency-free (stdlib shutil + zipfile).
@@ -17,10 +17,10 @@ import sys
 import zipfile
 from pathlib import Path
 
-# Pipeline-mode default: <Arma3>/ramet_output. Override via RAMET_OUTPUT env or --output.
+# Pipeline-mode default: <Arma3>/RAMET_Output/processed. Override via RAMET_OUTPUT env or --output.
 DEFAULT_OUTPUT = Path(os.environ.get(
     "RAMET_OUTPUT",
-    str(Path(os.environ.get("RAMET_ARMA_ROOT", os.getcwd())) / "ramet_output"),
+    str(Path(os.environ.get("RAMET_ARMA_ROOT", os.getcwd())) / "RAMET_Output" / "processed"),
 ))
 
 
@@ -68,7 +68,7 @@ def deploy_local(output_dir: Path, planner_dir: Path, worlds: list[str] | None =
 
 def deploy_zip(output_dir: Path, zip_dir: Path, worlds: list[str] | None = None,
                bundle: bool = False, dry_run: bool = False) -> dict:
-    """Per-world zip by default; --bundle merges all into one ramet_output_<ts>.zip."""
+    """Per-world zip by default; --bundle merges all into one RAMET_Output_<ts>.zip."""
     summary: dict = {"mode": "zip", "bundle": bundle, "zips": [], "skipped": []}
     zip_dir.mkdir(parents=True, exist_ok=True)
 
@@ -76,7 +76,7 @@ def deploy_zip(output_dir: Path, zip_dir: Path, worlds: list[str] | None = None,
         worlds = _list_worlds(output_dir)
 
     if bundle:
-        out_zip = zip_dir / "ramet_output_bundle.zip"
+        out_zip = zip_dir / "RAMET_Output_bundle.zip"
         if not dry_run:
             _zip_paths(out_zip, [(output_dir / w, w) for w in worlds if (output_dir / w / "map.json").exists()])
         summary["zips"].append({"path": str(out_zip), "worlds": worlds, "bytes": out_zip.stat().st_size if out_zip.exists() else 0})
@@ -112,7 +112,7 @@ def _zip_paths(out_zip: Path, items: list[tuple[Path, str]]) -> None:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="Deploy RAMET output to the planner.")
-    ap.add_argument("--output", default=str(DEFAULT_OUTPUT), help="RAMET output dir (default: <Arma3>/ramet_output)")
+    ap.add_argument("--output", default=str(DEFAULT_OUTPUT), help="RAMET output dir (default: <Arma3>/RAMET_Output/processed)")
     ap.add_argument("--world", action="append", help="restrict to specific world(s)")
     ap.add_argument("--dry-run", action="store_true")
     # local mode
@@ -120,7 +120,7 @@ def main() -> int:
     ap.add_argument("--planner-root", help="planner map_tiles/ dir (--local); required unless RAMET_PLANNER_ROOT is set")
     ap.add_argument("--prune-legacy", action="store_true", help="(--local) delete planner-side maps absent from output")
     # zip mode
-    ap.add_argument("--zip", action="store_true", help="produce zip(s) under <Arma3>/ramet_output/_zips/ for SFTP upload")
+    ap.add_argument("--zip", action="store_true", help="produce zip(s) under <Arma3>/RAMET_Output/_zips/ for SFTP upload")
     ap.add_argument("--zip-dir", help="override zip output dir (default: <output>/_zips/)")
     ap.add_argument("--bundle", action="store_true", help="(--zip) emit one bundle zip instead of per-world zips")
     args = ap.parse_args()

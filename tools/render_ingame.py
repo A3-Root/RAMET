@@ -2,14 +2,14 @@
 
 Input layout (default; can be overridden via RAMET_INGAME_OUTPUT_DIR on the C# side):
 
-    <Arma3>/arma3_mapexporter_output/{world}/
+    <Arma3>/RAMET_Output/raw/{world}/a3me/
         base.png                # required
         hires.png               # optional (preferred when present)
         index.json              # GMS PackageIndex metadata
 
 The aerial orthographic layer (cherry-picked from upstream GMS v2.2.0) is optional:
 
-    <Arma3>/arma3_mapexporter_output/{world}/
+    <Arma3>/RAMET_Output/raw/{world}/a3me/
         aerial.png              # optional in-game "satellite" imagery
         index_aerial.json       # GMS PackageIndex metadata for the aerial layer
 

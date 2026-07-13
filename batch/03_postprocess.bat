@@ -1,7 +1,7 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
 
-rem RAMET step 3 — post-process intermediate exports into <Arma3>\ramet_output\{world}\.
+rem RAMET step 3 — post-process raw exports into <Arma3>\RAMET_Output\processed\{world}\.
 rem
 rem Runs entirely in Docker — no host install of tippecanoe / pmtiles / cwebp / etc.
 rem   * ocap-rt render :  uses the upstream `ocap_renderterrain_process.bat` (its own Docker image)
@@ -94,6 +94,6 @@ if errorlevel 1 (
     popd & exit /b 1
 )
 
-echo === done. Output at "%ARMA_ROOT%\ramet_output". Run 04_deploy.bat to push to planner. ===
+echo === done. Output at "%ARMA_ROOT%\RAMET_Output\processed". Run 04_deploy.bat to push to planner. ===
 popd
 endlocal

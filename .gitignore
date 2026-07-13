@@ -59,6 +59,7 @@ reference_files/
 subprojects/ocap-renderterrain/reference_files/
 subprojects/grad_meh/build/
 subprojects/grad_meh/install/bin
+releases/@root_amet
 
 # Allow git to look into the subprojects directory structure
 !subprojects/

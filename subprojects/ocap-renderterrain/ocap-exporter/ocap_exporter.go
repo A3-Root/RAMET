@@ -24,7 +24,7 @@ var extensionCallbackFnc C.extensionCallback
 
 var ARMA3_ROOT string = getDir()
 var ADDON string = "ocap_exporter"
-var EXPORT_FOLDER string = ARMA3_ROOT + "\\" + ADDON
+var EXPORT_FOLDER string = ARMA3_ROOT + "\\RAMET_Output\\raw"
 
 var WORLDNAME string
 var EXPORT_WORLD_FOLDER string
@@ -135,7 +135,7 @@ func startWriting(worldname string) string {
 
 	// create world subfolder
 	WORLDNAME = fixEscapeQuotes(trimQuotes(worldname))
-	EXPORT_WORLD_FOLDER = EXPORT_FOLDER + "\\" + WORLDNAME
+\tEXPORT_WORLD_FOLDER = EXPORT_FOLDER + "\\" + WORLDNAME + "\\ocap-rt"
 	HEIGHTMAP_FILE_PATH = EXPORT_WORLD_FOLDER + "\\" + WORLDNAME + ".asc"
 	HEIGHTMAP_DATA = []string{}
 	HEIGHTMAP_BT_DATA = []string{}
@@ -145,13 +145,13 @@ func startWriting(worldname string) string {
 
 	// create world subfolder
 	_, err = os.Stat(EXPORT_WORLD_FOLDER)
-	if os.IsNotExist(err) {
-		os.Mkdir(EXPORT_WORLD_FOLDER, 0755)
+\tif os.IsNotExist(err) {
+\t\tos.MkdirAll(EXPORT_WORLD_FOLDER, 0755)
 	} else {
 		// delete existing world subfolder and any contents
 		os.RemoveAll(EXPORT_WORLD_FOLDER)
 		// create world subfolder
-		os.Mkdir(EXPORT_WORLD_FOLDER, 0755)
+\t\tos.MkdirAll(EXPORT_WORLD_FOLDER, 0755)
 	}
 
 	// define log output

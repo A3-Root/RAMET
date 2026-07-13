@@ -14,7 +14,7 @@ from . import bulk
 
 # Default override target for the GMS extension. SQF launcher sets this BEFORE
 # spawning Arma so the C# session honours it on Worker.start().
-DEFAULT_OUTPUT_SUBDIR = "arma3_mapexporter_output"
+DEFAULT_OUTPUT_SUBDIR = "RAMET_Output/raw"
 
 
 def _arma_root() -> Path:

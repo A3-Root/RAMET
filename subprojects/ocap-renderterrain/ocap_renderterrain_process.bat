@@ -13,26 +13,26 @@ if not exist "%RENDER_CONTEXT%\Dockerfile" (
 for %%I in ("%MOD_ROOT%\..") do set "MOD_PARENT=%%~fI"
 
 set "ARMA_ROOT="
-if exist "%MOD_PARENT%\ocap_exporter\" set "ARMA_ROOT=%MOD_PARENT%"
-if not defined ARMA_ROOT if exist "%CD%\ocap_exporter\" set "ARMA_ROOT=%CD%"
-if not defined ARMA_ROOT if exist "%MOD_ROOT%\ocap_exporter\" set "ARMA_ROOT=%MOD_ROOT%"
+if exist "%MOD_PARENT%\RAMET_Output\raw\" set "ARMA_ROOT=%MOD_PARENT%"
+if not defined ARMA_ROOT if exist "%CD%\RAMET_Output\raw\" set "ARMA_ROOT=%CD%"
+if not defined ARMA_ROOT if exist "%MOD_ROOT%\RAMET_Output\raw\" set "ARMA_ROOT=%MOD_ROOT%"
 
 if not defined ARMA_ROOT (
     echo Could not find exported source data.
     echo Checked:
-    echo   "%MOD_PARENT%\ocap_exporter"
-    echo   "%CD%\ocap_exporter"
-    echo   "%MOD_ROOT%\ocap_exporter"
-    echo Run this from your Arma 3 root, or place @ocap_renderterrain inside the Arma 3 root after exporting terrain source data.
+    echo   "%MOD_PARENT%\RAMET_Output\raw"
+    echo   "%CD%\RAMET_Output\raw"
+    echo   "%MOD_ROOT%\RAMET_Output\raw"
+    echo Run this from your Arma 3 root after exporting terrain source data.
     exit /b 1
 )
 
-set "INPUT_DIR=%ARMA_ROOT%\ocap_exporter"
-set "OUTPUT_DIR=%ARMA_ROOT%\ocap_renderterrain_output"
+set "INPUT_DIR=%ARMA_ROOT%\RAMET_Output\raw"
+set "OUTPUT_DIR=%ARMA_ROOT%\RAMET_Output\raw"
 set "WORLDS=%~1"
 if "%OCAP_RENDER_DOCKER_MEMORY%"=="" set "OCAP_RENDER_DOCKER_MEMORY=48g"
 
-if not exist "%OUTPUT_DIR%" mkdir "%OUTPUT_DIR%"
+if not exist "%INPUT_DIR%" mkdir "%INPUT_DIR%"
 
 echo Building Docker image from "%RENDER_CONTEXT%"...
 docker build -t ocap-renderterrain:latest "%RENDER_CONTEXT%"

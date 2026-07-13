@@ -16,30 +16,30 @@ fi
 MOD_PARENT="$(cd "$MOD_ROOT/.." && pwd)"
 
 ARMA_ROOT=""
-if [[ -d "$MOD_PARENT/ocap_exporter" ]]; then
+if [[ -d "$MOD_PARENT/RAMET_Output/raw" ]]; then
     ARMA_ROOT="$MOD_PARENT"
-elif [[ -d "$PWD/ocap_exporter" ]]; then
+elif [[ -d "$PWD/RAMET_Output/raw" ]]; then
     ARMA_ROOT="$PWD"
-elif [[ -d "$MOD_ROOT/ocap_exporter" ]]; then
+elif [[ -d "$MOD_ROOT/RAMET_Output/raw" ]]; then
     ARMA_ROOT="$MOD_ROOT"
 fi
 
 if [[ -z "$ARMA_ROOT" ]]; then
     echo "Could not find exported source data." >&2
     echo "Checked:" >&2
-    echo "  $MOD_PARENT/ocap_exporter" >&2
-    echo "  $PWD/ocap_exporter" >&2
-    echo "  $MOD_ROOT/ocap_exporter" >&2
-    echo "Run this from your Arma 3 root, or place @ocap_renderterrain inside the Arma 3 root after exporting terrain source data." >&2
+    echo "  $MOD_PARENT/RAMET_Output/raw" >&2
+    echo "  $PWD/RAMET_Output/raw" >&2
+    echo "  $MOD_ROOT/RAMET_Output/raw" >&2
+    echo "Run this from your Arma 3 root after exporting terrain source data." >&2
     exit 1
 fi
 
-INPUT_DIR="$ARMA_ROOT/ocap_exporter"
-OUTPUT_DIR="$ARMA_ROOT/ocap_renderterrain_output"
+INPUT_DIR="$ARMA_ROOT/RAMET_Output/raw"
+OUTPUT_DIR="$ARMA_ROOT/RAMET_Output/raw"
 WORLDS="${1:-}"
 OCAP_RENDER_DOCKER_MEMORY="${OCAP_RENDER_DOCKER_MEMORY:-48g}"
 
-mkdir -p "$OUTPUT_DIR"
+mkdir -p "$INPUT_DIR"
 
 echo "Building Docker image from \"$RENDER_CONTEXT\"..."
 docker build -t ocap-renderterrain:latest "$RENDER_CONTEXT"

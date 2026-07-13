@@ -236,9 +236,9 @@ void extractMap(const std::string &worldName, const std::string &worldPath, std:
 
     auto lowerWorldName = boost::algorithm::to_lower_copy(worldName);
 
-    auto basePath = fs::path("grad_meh") / lowerWorldName;
-    auto basePathGeojson = fs::path("grad_meh") / lowerWorldName / "geojson";
-    auto basePathSat = fs::path("grad_meh") / lowerWorldName / "sat";
+    auto basePath = fs::path("RAMET_Output") / "raw" / lowerWorldName / "grad_meh";
+    auto basePathGeojson = basePath / "geojson";
+    auto basePathSat = basePath / "sat";
     // Topo paths removed: topo rendering moved to tools/render_topo.py (Docker).
 
     std::stringstream startMsg;

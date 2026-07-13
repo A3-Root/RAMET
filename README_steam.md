@@ -22,9 +22,9 @@ Arma 3\@root_amet\[/code]
 [b]3. Open RAMET.[/b] Start Arma, select the RAMET spotlight/menu entry, choose the terrain(s), and begin the export. Large terrains can take a while. Do not close Arma or disable the terrain during the export.
 [b]4. Post-process the result.[/b] Install and start [url=https://www.docker.com/products/docker-desktop/]Docker Desktop[/url]. Open a terminal in the Arma 3 installation folder and run:[code]@root_amet\batch\03_postprocess.bat[/code]
 
-The finished tiles will be saved to [i][b]Arma 3\ramet_output\{world}\[/b][/i]. Docker provides the tile-processing tools, so you do not need to install tippecanoe, PMTiles, cwebp, pngquant, or oxipng separately.
+The finished tiles will be saved to [i][b]Arma 3\RAMET_Output\processed\{world}\[/b][/i]. Raw exporter data is kept under [i][b]Arma 3\RAMET_Output\raw\{world}\[/b][/i]. Docker provides the tile-processing tools, so you do not need to install tippecanoe, PMTiles, cwebp, pngquant, or oxipng separately.
 
-To copy tiles into a local planner, use [i][b]@root_amet\batch\04_deploy.bat --planner-root "C:\path\to\your\planner\map_tiles"[/b][/i]. To create upload archives, use [i][b]@root_amet\batch\05_zip_for_upload.bat[/b][/i]; the archives will be found under [i][b]ramet_output\_zips\[/b][/i].
+To copy tiles into a local planner, use [i][b]@root_amet\batch\04_deploy.bat --planner-root "C:\path\to\your\planner\map_tiles"[/b][/i]. To create upload archives, use [i][b]@root_amet\batch\05_zip_for_upload.bat[/b][/i]; the archives will be found under [i][b]RAMET_Output\_zips\[/b][/i].
 
 [hr][h2]Exporting a queue of terrains[/h2]
 For automatic exports, edit [i][b]@root_amet\batch\worlds.txt[/b][/i]. Add one exact Arma [i]CfgWorlds[/i] class name per line, for example:[code]altis
