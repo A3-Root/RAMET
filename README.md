@@ -1,7 +1,7 @@
 # RAMET
 
 <p align="center">
-  <img src="ramet_logo_clear.png" alt="RAMET logo" width="256">
+  <img src="ramet_logo_clear.png" alt="RAMET logo" width="512">
 </p>
 
 <p align="center">
