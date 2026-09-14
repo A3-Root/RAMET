@@ -171,6 +171,14 @@ def verify_world(world_dir: Path) -> tuple[list[str], list[str]]:
         if not path.exists() or path.stat().st_size == 0:
             errs.append(f"DEM missing/empty: {path}")
 
+    terrain3d = meta.get("terrain3d") or {}
+    if terrain3d:
+        path = world_dir / terrain3d.get("path", "3d/terrain.json")
+        if not path.exists() or path.stat().st_size == 0:
+            errs.append(f"3D terrain manifest missing/empty: {path}")
+        elif not (world_dir / "3d" / "height_overview.bin").exists():
+            errs.append(f"3D overview heights missing: {world_dir / '3d' / 'height_overview.bin'}")
+
     errs += _check_sat_source(world_dir, None)
 
     if not meta.get("imageSize"):

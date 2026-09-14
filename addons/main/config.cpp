@@ -82,13 +82,13 @@ class CfgMainMenuSpotlight {
         condition = "!(uiNamespace getVariable ['ramet_isDiagBuild', false])";
     };
     class ramet_ocap {
-        text = "RAMET — OCAP export (diag)";
+        text = "RAMET — OCAP export";
         textIsQuote = 0;
         picture = RAMET_IMG_SPOTLIGHT_OCAP;
         video = "";
         action = "params ['_ctrl']; (ctrlParent _ctrl) createDisplay 'ocap_renderterrain_main';";
         actionText = "OPEN";
-        condition = "uiNamespace getVariable ['ramet_isDiagBuild', false]";
+        condition = "true";
     };
     class ramet_ingame {
         text = "RAMET — In-Game export (GMS)";

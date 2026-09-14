@@ -17,13 +17,15 @@ if (!isNil "ramet_exportRunning" && {ramet_exportRunning}) exitWith {
 };
 
 private _gradAvailable = !isNil "gradMehExportMap";
-private _ocapAvailable = [] call ramet_fnc_isDiagBuild;
+// OCAP runs on every branch: the terrain SVG comes from the extension (game
+// executable export) or, on the diagnostics build, from diag_exportTerrainSVG.
+private _ocapSvgAvailable = ([] call ramet_fnc_isDiagBuild) || {("ocap_exporter" callExtension "svgAvailable") == "true"};
 private _ingameAvailable = !isNil "root_amet_a3me_export";
 
 private _msg = format [
-    "Select bulk export mode.\n\nGrad_meh available: %1\nOCAP (diag) available: %2\nIn-Game (GMS) available: %3\n\n(In-Game export is run from the main-menu spotlight tile.)",
+    "Select bulk export mode.\n\nGrad_meh available: %1\nOCAP terrain SVG available: %2\nIn-Game (GMS) available: %3\n\n(In-Game export is run from the main-menu spotlight tile.)",
     ["NO — main branch needed", "YES"] select _gradAvailable,
-    ["NO — diagnostic branch needed", "YES"] select _ocapAvailable,
+    ["NO — heightmap only", "YES"] select _ocapSvgAvailable,
     ["NO — bundled exporter unavailable", "YES"] select _ingameAvailable
 ];
 
@@ -43,9 +45,6 @@ private _msg = format [
     },
     {
         // NO button -> ocap
-        if !([] call ramet_fnc_isDiagBuild) exitWith {
-            hint "OCAP exporter not available — diagnostic branch required.";
-        };
         ramet_exportRunning = true;
         [] spawn {
             [] call ramet_fnc_bulkExportOcap;

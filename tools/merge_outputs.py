@@ -111,11 +111,16 @@ def merge_world(world: str,
     if ocap_raw_dir and ocap_raw_dir.is_dir():
         if "ocap" not in sources:
             sources.append("ocap")
-        svg_src = ocap_raw_dir / "map.svg"
-        if svg_src.exists():
+        # The in-game exporter writes {world}.svg / {world}.asc; map.svg /
+        # heightmap.asc are accepted for renamed or hand-placed inputs.
+        world_lc = world.lower()
+        svg_src = next((p for p in (ocap_raw_dir / f"{world_lc}.svg", ocap_raw_dir / "map.svg")
+                        if p.exists()), None)
+        if svg_src is not None:
             _gz_in_place(svg_src, world_out / "svg" / "full.svg.gz")
-        asc_src = ocap_raw_dir / "heightmap.asc"
-        if asc_src.exists():
+        asc_src = next((p for p in (ocap_raw_dir / f"{world_lc}.asc", ocap_raw_dir / "heightmap.asc")
+                        if p.exists()), None)
+        if asc_src is not None:
             _gz_in_place(asc_src, world_out / "dem" / "dem.asc.gz")
 
     # ---- grad_meh non-raster data ----

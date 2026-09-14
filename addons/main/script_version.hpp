@@ -5,9 +5,9 @@
 #define PREFIX root_amet
 
 #define MAJOR 1
-#define MINOR 5
+#define MINOR 6
 #define PATCH 0
-#define BUILD 6
+#define BUILD 0
 
 #define VERSION MAJOR.MINOR.PATCH.BUILD
 #define VERSION_AR MAJOR,MINOR,PATCH,BUILD

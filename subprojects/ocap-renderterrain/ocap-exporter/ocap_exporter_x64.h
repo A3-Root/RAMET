@@ -27,6 +27,7 @@ extern const char *_GoStringPtr(_GoString_ s);
 #include <stdio.h>
 #include <string.h>
 #include "extensionCallback.h"
+#include "exportSvg.h"
 
 #line 1 "cgo-generated-wrapper"
 

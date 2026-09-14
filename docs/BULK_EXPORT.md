@@ -37,10 +37,12 @@ with the target terrain enabled and choose the matching spotlight:
 | --- | --- | --- |
 | Grad_meh | Main/stable | `grad_meh\{world}\` |
 | In-Game/GMS | Main/stable | `ingame\{world}\` |
-| OCAP RenderTerrain | Diagnostic | `ocap_exporter\{world}\` |
+| OCAP RenderTerrain | Main/stable (64-bit) | `ocap_exporter\{world}\` |
 
-The OCAP exporter needs the diagnostic executable. Grad_meh and GMS use the
-main branch. The picker only lists worlds that Arma loaded.
+All exporters run on the main branch. The OCAP terrain SVG is written by the
+OCAP extension through the export function in the game executable; on the
+diagnostic executable `diag_exportTerrainSVG` is the fallback. The picker only
+lists worlds that Arma loaded.
 
 ## Queue several worlds
 
@@ -73,16 +75,15 @@ advances through the queue with FlatDevil. Raw output goes to
 
 ### OCAP queue
 
-1. Switch Steam to the Arma 3 diagnostic/development branch and wait for the
-   update to finish.
-2. Close Arma if it is running.
+1. Close Arma if it is running.
 3. Run:
 
    ```bat
    @root_amet\batch\02_export_ocap.bat
    ```
 
-The script launches `arma3diag_x64.exe`. The OCAP stage keeps its own state,
+The script launches `arma3_x64.exe` (or `arma3diag_x64.exe` when the normal
+64-bit executable is missing). The OCAP stage keeps its own state,
 so it can continue after a crash or a later relaunch. Raw output goes to
 `Arma 3\ocap_exporter\{world}\`.
 
@@ -167,8 +168,10 @@ Arma has been restarted since FlatDevil was installed.
 **A queued world is skipped.** Check the spelling and case of its `CfgWorlds`
 class name. Confirm the terrain mod and its dependencies are enabled.
 
-**`diag_exportTerrainSVG` is missing.** The diagnostic executable is required
-for OCAP. Switch branches and rerun `02_export_ocap.bat`.
+**The terrain SVG export is unavailable.** The OCAP extension needs the 64-bit
+Windows executable. The heightmap is still exported. If a game update removed
+the export function, run the diagnostic executable so the
+`diag_exportTerrainSVG` fallback is used.
 
 **Docker reports missing tools or cannot connect.** Start Docker Desktop and
 wait for the daemon to become ready. The post-processing tools run inside the

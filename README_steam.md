@@ -17,8 +17,8 @@ Arma 3\@root_amet\[/code]
 
 [b]1. Enable the correct mods.[/b] In the Arma 3 launcher, enable [i][b]@root_amet[/b][/i], [i][b]@CBA_A3[/b][/i], the target terrains, and every dependency required by that terrain. Keep the terrain enabled while exporting.
 [b]2. Pick the correct Arma branch.[/b]
-[list][*][b]Stable/main branch:[/b] use [i][b]RAMET — Grad_meh export[/b][/i] for the regular satellite + vector export, or [i][b]RAMET — In-Game export (GMS)[/b][/i] for an in-game aerial export.
-[*][b]Diagnostic/development branch:[/b] use [i][b]RAMET — OCAP export (diag)[/b][/i]. This requires the diagnostic executable; the stable executable does not provide the necessary OCAP export function.[/list]
+[list][*][b]Stable/main branch:[/b] use [i][b]RAMET — Grad_meh export[/b][/i] for the regular satellite + vector export, [i][b]RAMET — In-Game export (GMS)[/b][/i] for an in-game aerial export, or [i][b]RAMET — OCAP export[/b][/i] for high-resolution OCAP terrain tiles.
+[*][b]Diagnostic branch:[/b] not required. The OCAP terrain SVG is exported through the game executable; the game freezes briefly while it is written.[/list]
 [b]3. Open RAMET.[/b] Start Arma, select the RAMET spotlight/menu entry, choose the terrain(s), and begin the export. Large terrains can take a while. Do not close Arma or disable the terrain during the export.
 [b]4. Post-process the result.[/b] Install and start [url=https://www.docker.com/products/docker-desktop/]Docker Desktop[/url]. Open a terminal in the Arma 3 installation folder and run:[code]@root_amet\batch\03_postprocess.bat[/code]
 
@@ -34,7 +34,7 @@ my_custom_world
 Use the class name, not necessarily the display name shown in the launcher. The terrain mods for every listed world must be installed and enabled.
 [list]
 [*]On the stable branch, double-click [i][b]@root_amet\batch\01_export_grad_meh.bat[/b][/i].
-[*]On the diagnostic branch, double-click [i][b]@root_amet\batch\02_export_ocap.bat[/b][/i].
+[*]For OCAP, double-click [i][b]@root_amet\batch\02_export_ocap.bat[/b][/i].
 [/list]
 The scripts will launch the correct Arma executable and use FlatDevil to work through the queue. They can resume after crashes or restarts. Check [i][b]ramet_state\ramet_bulk.log[/b][/i] for progress, then run [i][b]03_postprocess.bat[/b][/i].
 
@@ -42,7 +42,7 @@ The scripts will launch the correct Arma executable and use FlatDevil to work th
 [table]
 [tr][th]Exporter[/th][th]Branch[/th][th]Use it for[/th][/tr]
 [tr][td]Grad_meh[/td][td]Stable/main[/td][td]Normal satellite + vector map data[/td][/tr]
-[tr][td]OCAP RenderTerrain[/td][td]Diagnostic[/td][td]High-resolution OCAP terrain tile pyramids[/td][/tr]
+[tr][td]OCAP RenderTerrain[/td][td]Stable/main (64-bit)[/td][td]High-resolution OCAP terrain tile pyramids[/td][/tr]
 [tr][td]In-Game/GMS[/td][td]Stable/main[/td][td]Aerial imagery captured through the game[/td][/tr]
 [/table]
 You can run more than one exporter for the same terrain. Post-processing will use whichever valid source data exists and will only include layers that were actually produced.
@@ -52,7 +52,7 @@ You can run more than one exporter for the same terrain. Post-processing will us
 [*][b]RAMET is missing:[/b] confirm that the Workshop item is enabled, CBA is enabled, and the terrain and its dependencies are enabled. Restart Arma after changing mods.
 [*][b]The terrain is missing from the picker:[/b] install and enable its terrain mod and dependencies. RAMET reads the terrains currently loaded by Arma.
 [*][b]FlatDevil or Python errors:[/b] confirm that [i][b]flatdevil_x64.dll[/b][/i] is next to [i][b]arma3_x64.exe[/b][/i], Python 3.7+ is installed, and Arma was restarted after installing the DLL.
-[*][b]OCAP reports that diag_exportTerrainSVG is missing:[/b] switch Steam to the Arma 3 diagnostic/development branch and run the diagnostic executable.
+[*][b]OCAP reports the terrain SVG export is unavailable:[/b] run the 64-bit game executable. If a game update removed the export function, run the diagnostic executable so RAMET can fall back to diag_exportTerrainSVG.
 [*][b]Post-processing fails:[/b] start Docker Desktop and wait until it indicates Docker is running. If OCAP rendering already finished, retry with [i][b]@root_amet\batch\03_postprocess.bat --skip-ocap[/b][/i].
 [/list]
 [b]For the full beginner-friendly guide, batch details, output locations, and build instructions, read the [url=https://github.com/A3-Root/RAMET/blob/main/README.md]README.md on GitHub[/url].[/b]

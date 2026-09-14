@@ -247,20 +247,26 @@ if (isNil "CBA_fnc_encodeJSON") then {
     format["[%1]: %2", ocap_exporter_addon, _result#0] call ocap_exporter_fnc_log;
 
     comment "SAVE SVG OF MAP";
-    comment "check if running diagnostic version of Arma 3";
-    if (isNil "BIS_fnc_diagRadio") exitWith {
-        format["[%1]: Exporting the SVG requires running the diagnostics (Development branch) of Arma 3. Please change this under the Properties of Arma 3 in Steam, then relaunch.", ocap_exporter_addon] call ocap_exporter_fnc_log;
-        ocap_exporter_done = true;
-    };
-
-    isNil {
-        private _svgPath = format[
-            "%1\RAMET_Output\raw\%2\ocap-rt\%3.svg",
-            (ocap_exporter_addon callExtension "getDir"),
-            toLower worldName,
-            toLower worldName
-        ];
-        diag_exportTerrainSVG [_svgPath,true,false,true,true,true,false];
+    comment "The extension calls the engine SVG export exposed by the game executable, which works on every branch.
+    The diagnostics command is only used as a fallback and is compiled from a string so this file still compiles on builds without diag commands.";
+    private _svgPath = format[
+        "%1\RAMET_Output\raw\%2\ocap-rt\%3.svg",
+        (ocap_exporter_addon callExtension "getDir"),
+        toLower worldName,
+        toLower worldName
+    ];
+    format["[%1]: Exporting terrain SVG (the game may freeze while this runs)...", ocap_exporter_addon] call ocap_exporter_fnc_log;
+    private _svgResult = (ocap_exporter_addon callExtension ["exportSVG", [_svgPath, true, false, true, true, true, false]]) select 0;
+    if (_svgResult != "ok") then {
+        private _isDiag = (uiNamespace getVariable ["ramet_isDiagBuild", false]) || {!isNil "BIS_fnc_diagRadio"};
+        if (_isDiag) then {
+            format["[%1]: Extension SVG export returned '%2', using diag_exportTerrainSVG instead.", ocap_exporter_addon, _svgResult] call ocap_exporter_fnc_log;
+            isNil {
+                call compile format ["diag_exportTerrainSVG [%1,true,false,true,true,true,false]", str _svgPath];
+            };
+        } else {
+            format["[%1]: Terrain SVG export unavailable ('%2'). Continuing with the heightmap only.", ocap_exporter_addon, _svgResult] call ocap_exporter_fnc_log;
+        };
     };
 
     comment "// filePath

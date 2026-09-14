@@ -44,25 +44,22 @@ Keep the terrain enabled for the entire export. If you plan to export multiple t
 
 ### 2. Choose the Arma branch
 
-Use the **main/stable Arma 3 branch** for:
+Use the **main/stable Arma 3 branch** for every exporter:
 
 - `RAMET — Grad_meh export` for standard satellite and vector export
 - `RAMET — In-Game export (GMS)` for in-game aerial export
+- `RAMET — OCAP export` for the high-resolution OCAP RenderTerrain path
 
-Use the **Arma 3 diagnostic/development branch** for:
-
-- `RAMET — OCAP export (diag)` for the high-resolution OCAP RenderTerrain path
-
-You do not need the diagnostic branch for a standard Grad_meh export. Steam may refer to the diagnostic version as a beta branch; switch branches only when needed for OCAP. Allow Steam to finish updating before launching.
+The OCAP terrain SVG is written by the RAMET OCAP extension, which calls the SVG export function the 64-bit game executable already contains, so the diagnostic branch is no longer required. The game freezes while the SVG is written (up to a minute on large terrains). If you do run the diagnostic executable, `diag_exportTerrainSVG` is used as a fallback.
 
 ### 3. Start an interactive export
 
 1. Launch Arma 3 with RAMET, CBA, and the target terrain enabled.
 2. On the main menu, open the RAMET spotlight/menu entry. If the menu isn’t visible, check the troubleshooting section below.
 3. Choose one of the following:
-   - **RAMET — Grad_meh export** on the stable branch
-   - **RAMET — In-Game export (GMS)** on the stable branch
-   - **RAMET — OCAP export (diag)** on the diagnostic branch
+   - **RAMET — Grad_meh export**
+   - **RAMET — In-Game export (GMS)**
+   - **RAMET — OCAP export**
 4. Select the terrain(s) in the picker. Only terrains currently known to Arma can be selected.
 5. Start the export and wait for it to finish. Large terrains can take a long time. Do not close Arma or disable the terrain mod while an export is running.
 
@@ -106,7 +103,7 @@ On the **stable branch**, double-click:
 @root_amet\batch\01_export_grad_meh.bat
 ```
 
-On the **diagnostic branch**, double-click:
+For the OCAP queue, double-click:
 
 ```text
 @root_amet\batch\02_export_ocap.bat
@@ -121,7 +118,7 @@ These scripts launch the correct Arma executable and process the queue using Fla
 | Export | Arma branch | Best for | Entry point |
 | --- | --- | --- | --- |
 | Grad_meh | Stable/main | The typical satellite and vector map workflow | RAMET spotlight or `01_export_grad_meh.bat` |
-| OCAP RenderTerrain | Diagnostic | High-resolution OCAP terrain tile pyramids | RAMET spotlight or `02_export_ocap.bat` |
+| OCAP RenderTerrain | Stable/main (64-bit) | High-resolution OCAP terrain tile pyramids | RAMET spotlight or `02_export_ocap.bat` |
 | In-Game/GMS | Stable/main | Aerial imagery captured through the game | RAMET spotlight |
 
 You can run multiple exporters for the same world. Post-processing includes all valid source folders that exist and only displays layers that were actually produced.
@@ -145,9 +142,9 @@ Check that:
 
 Install and enable the terrain mod and its dependencies in the launcher. Restart Arma after changing mods. RAMET reads Arma's loaded `CfgWorldList`; an uninstalled or disabled terrain cannot be selected.
 
-### OCAP says that `diag_exportTerrainSVG` is missing
+### OCAP says the terrain SVG export is unavailable
 
-You launched the stable executable. Switch Steam to the Arma 3 diagnostic/development branch and start `arma3diag_x64.exe` through the diagnostic launcher or `02_export_ocap.bat`.
+The SVG export needs the 64-bit Windows executable (`arma3_x64.exe`) and `ocap_exporter_x64.dll` from `@root_amet`. The heightmap is still exported without it. If a future game update removes the export function, run `arma3diag_x64.exe` instead; RAMET then falls back to `diag_exportTerrainSVG`.
 
 ### Post-processing fails
 
@@ -159,7 +156,7 @@ Start Docker Desktop and wait until it reports that Docker is running. Then try 
 
 ### A batch script says that an executable is missing
 
-The scripts should be inside `Arma 3\@root_amet\batch\`. They look for Arma by going two folders upward. Do not move the `batch` folder outside `@root_amet`. `01_export_grad_meh.bat` needs `arma3_64.exe`; `02_export_ocap.bat` needs `arma3diag_x64.exe`.
+The scripts should be inside `Arma 3\@root_amet\batch\`. They look for Arma by going two folders upward. Do not move the `batch` folder outside `@root_amet`. `01_export_grad_meh.bat` needs `arma3_64.exe`; `02_export_ocap.bat` uses `arma3_x64.exe` and falls back to `arma3diag_x64.exe`.
 
 ## Building from source
 

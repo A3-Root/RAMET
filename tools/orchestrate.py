@@ -152,7 +152,8 @@ def process_world(world: str,
                   skip_pmtiles: bool = False,
                   skip_slice: bool = False,
                   skip_optimize: bool = False,
-                  optimize_workers: int | None = None) -> dict:
+                  optimize_workers: int | None = None,
+                  skip_3d: bool = False) -> dict:
     if not any([grad_dir, ocap_raw_dir, ocap_rendered_dir, ingame_dir]):
         return {"world": world, "ok": False, "reason": "no inputs"}
 
@@ -378,6 +379,20 @@ def process_world(world: str,
             if isinstance(map_json.get("dem"), dict):
                 map_json["dem"]["cellSize"] = cs
 
+    # 3D terrain + object data for the planner 3D view
+    if not skip_3d and grad_dir is not None:
+        try:
+            import build_3d
+            block = build_3d.build_3d(out_root / world, grad_dir)
+            if block is not None:
+                map_json["terrain3d"] = block
+                stage_results["build_3d"] = {"ok": True, "hasObjects": block.get("hasObjects", False)}
+            else:
+                stage_results["build_3d"] = {"ok": False, "reason": "no dem"}
+        except Exception as exc:
+            print(f"[orchestrate] {world}: build_3d failed — {exc}")
+            stage_results["build_3d"] = {"ok": False, "reason": "error", "err": str(exc)}
+
     (out_root / world / "map.json").write_text(json.dumps(map_json, indent=2), encoding="utf-8")
     (out_root / world / "source.json").write_text(json.dumps({
         "generatedAt": datetime.datetime.now(datetime.timezone.utc).isoformat().replace("+00:00", "Z"),
@@ -473,10 +488,10 @@ def _probe_sat_mem_gb(grad_dir) -> float:
 
 
 def _run_world(args_tuple: tuple) -> dict:
-    world, gd, oraw, orend, ingame, out_root, skip_pmtiles, skip_slice, skip_optimize, opt_workers = args_tuple
+    world, gd, oraw, orend, ingame, out_root, skip_pmtiles, skip_slice, skip_optimize, opt_workers, skip_3d = args_tuple
     try:
         return process_world(world, gd, oraw, orend, out_root, ingame,
-                             skip_pmtiles, skip_slice, skip_optimize, opt_workers)
+                             skip_pmtiles, skip_slice, skip_optimize, opt_workers, skip_3d)
     except Exception as exc:
         return {"world": world, "ok": False, "errors": [str(exc)], "notes": []}
 
@@ -492,6 +507,7 @@ def main() -> int:
                     help="process only raw a3me exports; skip grad_meh/ocap stages")
     ap.add_argument("--skip-pmtiles", action="store_true")
     ap.add_argument("--skip-slice", action="store_true")
+    ap.add_argument("--skip-3d", action="store_true", help="skip the planner 3D terrain/object data")
     ap.add_argument("--skip-optimize", action="store_true")
     ap.add_argument("--workers", type=int, default=1,
                     help="parallel world workers (default 1; a single big world peaks ~40 GB. "
@@ -555,7 +571,7 @@ def main() -> int:
             None if args.ingame_only or not ocap_raw_dir.is_dir() else ocap_raw_dir,
             None if args.ingame_only or not ocap_rendered_dir.is_dir() else ocap_rendered_dir,
             ingame_dir if ingame_dir.is_dir() else None,
-            out_root, skip_pmtiles, skip_slice, skip_optimize, args.optimize_workers,
+            out_root, skip_pmtiles, skip_slice, skip_optimize, args.optimize_workers, args.skip_3d,
         ))
 
     # Pause sentinel: create <Arma3>/ramet.pause on the host to pause between worlds.

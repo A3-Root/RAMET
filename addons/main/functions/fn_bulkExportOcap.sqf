@@ -41,8 +41,8 @@ private _log = {
 
 [format ["bulk ocap export starting (worldName=%1)", worldName]] call _log;
 
-if !([] call ramet_fnc_isDiagBuild) exitWith {
-    ["ERROR: diag_exportTerrainSVG not available — must run on Arma diagnostic branch"] call _log;
+if !(([] call ramet_fnc_isDiagBuild) || {("ocap_exporter" callExtension "svgAvailable") == "true"}) then {
+    ["WARN: terrain SVG export unavailable in this executable — exporting heightmaps only"] call _log;
 };
 
 while {true} do {

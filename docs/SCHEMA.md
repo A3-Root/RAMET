@@ -32,6 +32,7 @@ For `tools/orchestrate.py --from-reference`, the same schema is written under
 | `vectorSource` | `object?`  | Present when PMTiles was built. |
 | `svgLayers`    | `array?`   | Present when SVG slicing succeeded. |
 | `dem`          | `object?`  | Present when a DEM exists. |
+| `terrain3d`    | `object?`  | Present when the planner 3D data was built. |
 | `preview`      | `string?`  | Relative preview PNG path, or `null` when absent. |
 
 ## `rasterLayers[]`
@@ -110,6 +111,30 @@ Each entry points at a gzipped SVG file and is served with
 
 `dem.asc.gz` is optional, but when present the planner can use it for terrain or
 debug tooling.
+
+## `terrain3d`
+
+```jsonc
+{ "schema": "ramet-3d-1", "path": "3d/terrain.json", "hasObjects": true }
+```
+
+Written by `tools/build_3d.py` from the DEM and the grad_meh `3d/` export
+(`models.json`, `models.bin`, `objects.bin`). `3d/terrain.json` describes:
+
+- `heights`: `cellSize`, grid `rows`/`cols`, quantisation `min`/`max`,
+  `overview` (`3d/height_overview.bin`, whole map, `stride` cells between
+  samples, last row/column clamped to the grid edge) and `chunks`
+  (`3d/height/{cx}_{cy}.bin`, `cells + 1` samples per side, `size` metres).
+  Heights are uint16 little-endian, rows south to north:
+  `h = min + q / 65535 * (max - min)`; sample `(i, j)` is at world
+  `(i * cellSize, j * cellSize)`.
+- `objects` (only with grad_meh data): `models` (`3d/models.json`, one entry per
+  used model with `category`, visual `bboxMin`/`bboxMax` and offsets into
+  `3d/models.bin`, which holds the Geometry LOD as float32 xyz vertices followed by
+  uint32 triangle indices, model space x right / y up / z forward) and `path`
+  (`3d/objects/{cx}_{cy}.bin`, 52-byte records: uint32 model id, float32 east,
+  north, height ASL, float32[9] model axes `_0`, `_1`, `_2`). Objects use the same
+  chunk grid as the heights.
 
 ## `source.json`
 

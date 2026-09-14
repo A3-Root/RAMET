@@ -5,6 +5,7 @@ package main
 #include <stdio.h>
 #include <string.h>
 #include "extensionCallback.h"
+#include "exportSvg.h"
 */
 import "C" // This is required to import the C code
 
@@ -13,6 +14,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -101,6 +103,18 @@ func goRVExtensionArgs(output *C.char, outputsize C.size_t, input *C.char, argv 
 				temp = "Saving data..."
 			}
 		}
+	case "exportSVG":
+		{
+			if argc >= 1 {
+				temp = exportSVG(out)
+			} else {
+				temp = "error|missing_path"
+			}
+		}
+	case "svgAvailable":
+		{
+			temp = strconv.FormatBool(C.ocapExportSvgAvailable() == 1)
+		}
 	}
 
 	// Return a result to Arma
@@ -112,6 +126,47 @@ func goRVExtensionArgs(output *C.char, outputsize C.size_t, input *C.char, argv 
 	}
 
 	C.memmove(unsafe.Pointer(output), unsafe.Pointer(result), size)
+}
+
+// exportSVG writes the terrain SVG through the game executable.
+// Arguments: path, then optional flags in engine order: locationNames, grid,
+// contours, treeObjects, mountainHeightpoints, simpleRoads.
+func exportSVG(args []string) string {
+	path := fixEscapeQuotes(trimQuotes(args[0]))
+	if path == "" {
+		return "error|missing_path"
+	}
+	defaults := []bool{true, false, true, true, true, false}
+	flags := make([]C.int, len(defaults))
+	for i, def := range defaults {
+		value := def
+		if len(args) > i+1 {
+			value = strings.EqualFold(trimQuotes(args[i+1]), "true")
+		}
+		if value {
+			flags[i] = 1
+		}
+	}
+	if dir := filepath.Dir(path); dir != "" {
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			log.Printf("exportSVG: cannot create %s: %v", dir, err)
+			return "error|mkdir_failed"
+		}
+	}
+	cPath := C.CString(path)
+	defer C.free(unsafe.Pointer(cPath))
+	started := time.Now()
+	if C.ocapExportSvg(cPath, flags[0], flags[1], flags[2], flags[3], flags[4], flags[5]) != 0 {
+		log.Printf("exportSVG: export function not available in this executable")
+		return "error|symbol_not_found"
+	}
+	info, err := os.Stat(path)
+	if err != nil || info.Size() == 0 {
+		log.Printf("exportSVG: no output written to %s", path)
+		return "error|no_output"
+	}
+	log.Printf("exportSVG: wrote %s (%d bytes) in %s", path, info.Size(), time.Since(started))
+	return "ok"
 }
 
 func trimQuotes(s string) string {

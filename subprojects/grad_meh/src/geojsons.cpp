@@ -1,6 +1,7 @@
 #include "geojsons.h"
 
 #include "area.h"
+#include "objects3d.h"
 
 void writeLocations(const std::string& worldName, std::filesystem::path& basePathGeojson)
 {
@@ -873,6 +874,9 @@ void writeGeojsons(arma_file_formats::cxx::OprwCxx& wrp, std::filesystem::path& 
     std::vector<std::pair<std::string, LodCxx>> modelMapTypes;
     modelMapTypes.resize(wrp.models.size());
 
+    std::vector<Model3D> models3d;
+    models3d.resize(wrp.models.size());
+
 
     std::map<fs::path, rust::Box<arma_file_formats::cxx::PboReaderCxx>> pboMap;
     for (int i = 0; i < wrp.models.size(); i++) {
@@ -880,14 +884,16 @@ void writeGeojsons(arma_file_formats::cxx::OprwCxx& wrp, std::filesystem::path& 
         if (boost::starts_with(modelPath, "\\")) {
             modelPath = modelPath.substr(1);
         }
+        models3d[i].path = modelPath;
 
         auto pboPath = findPboPath(modelPath);
         try {
+            // A missing model only skips that model; the remaining models are still read.
             if (pboPath.empty()) {
                 PLOG_WARNING << fmt::format("Couldn't find path for model: {}", modelPath);
                 modelMapTypes[i] = {};
                 modelInfos[i] = {};
-                break;
+                continue;
             }
 
             if (pboMap.count(pboPath) < 1) {
@@ -903,7 +909,7 @@ void writeGeojsons(arma_file_formats::cxx::OprwCxx& wrp, std::filesystem::path& 
                 PLOG_WARNING << fmt::format("Couldn't get data for model: {} (PBO: {})", modelPath, pboPath.string());
                 modelMapTypes[i] = {};
                 modelInfos[i] = {};
-                break;
+                continue;
             }
 
             PLOG_INFO << fmt::format("Reading P3D: {} (PBO: {})", modelPath, pboPath.string());
@@ -915,6 +921,7 @@ void writeGeojsons(arma_file_formats::cxx::OprwCxx& wrp, std::filesystem::path& 
 
             auto odol_reader = arma_file_formats::cxx::create_odol_lazy_reader_vec(p3dData);
             auto odol2 = odol_reader->get_odol();
+            setModel3DBounds(models3d[i], odol2);
 
             arma_file_formats::cxx::LodCxx lod = {};
 
@@ -937,11 +944,13 @@ void writeGeojsons(arma_file_formats::cxx::OprwCxx& wrp, std::filesystem::path& 
             {
                 lod = odol_reader->read_lod(arma_file_formats::cxx::ResolutionEnumCxx::Geometry);
                 rvffIndex = 1;
+                setModel3DMesh(models3d[i], lod);
 
                 for (auto& prop : lod.named_properties) {
                     if (static_cast<std::string>(prop.property) == "map")
                     {
                         auto val = static_cast<std::string>(prop.value);
+                        models3d[i].mapType = boost::algorithm::to_lower_copy(val);
                         if ((val == "railway" || val == "road" || val == "track" || val == "main road") && foundMemoryLod) {
                             lod = odol_reader->read_lod(arma_file_formats::cxx::ResolutionEnumCxx::Memory);
                             rvffIndex = 2;
@@ -1008,5 +1017,7 @@ void writeGeojsons(arma_file_formats::cxx::OprwCxx& wrp, std::filesystem::path& 
     writeRunways(basePathGeojson, worldName);
 
     writeRiver(wrp, basePathGeojson);
+
+    write3dData(wrp, models3d, basePathGeojson.parent_path() / "3d");
 
 }
