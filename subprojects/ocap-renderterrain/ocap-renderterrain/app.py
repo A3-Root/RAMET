@@ -133,11 +133,11 @@ for WORLDNAME_PATH in world_list:
     _world_t = time.time()
     print("PROCESSING", WORLDNAME)
 
-    # The RAMET launcher mounts the same raw folder as input and output, so the output
-    # folder can be the input folder. Never wipe the exporter's source files there.
-    SOURCE_FILES = set()
-    if os.path.realpath(OUTPUT_FOLDER) == os.path.realpath(INPUT_FOLDER):
-        SOURCE_FILES = {"map.json", f"{WORLDNAME}.asc", f"{WORLDNAME}.svg", "ocap_exporter.log"}
+    # The RAMET launcher bind-mounts the same raw folder at /app/input and /app/output, so
+    # the output folder is usually the input folder under a different path (realpath and
+    # inode checks can't detect that across two mounts). Never wipe the exporter's source
+    # files from the output folder; rendering overwrites map.json anyway.
+    SOURCE_FILES = {"map.json", f"{WORLDNAME}.asc", f"{WORLDNAME}.bt", f"{WORLDNAME}.svg", "ocap_exporter.log"}
 
     # delete everything in the temp and output folders wihtout deleting the folder itself
     for TGT_FOLDER in [OUTPUT_FOLDER, TEMP_FOLDER]:
