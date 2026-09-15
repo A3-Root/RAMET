@@ -4,6 +4,7 @@ setlocal EnableExtensions
 rem RAMET — pack <Arma3>\RAMET_Output\processed\{world}\ into per-world zips for SFTP upload
 rem to a remote planner. Pass --bundle to emit a single RAMET_Output_bundle.zip.
 rem Host Python only (deploy_to_planner.py --zip is stdlib-only).
+rem Raster tiles are packed into {world}/tiles.sqlite inside each zip; pass --loose to zip loose tiles/ instead.
 
 set "SCRIPT_DIR=%~dp0"
 pushd "%SCRIPT_DIR%.." >nul

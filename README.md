@@ -63,7 +63,15 @@ The OCAP terrain SVG is written by the RAMET OCAP extension, which calls the SVG
 4. Select the terrain(s) in the picker. Only terrains currently known to Arma can be selected.
 5. Start the export and wait for it to finish. Large terrains can take a long time. Do not close Arma or disable the terrain mod while an export is running.
 
-The raw output is saved in the Arma 3 folder. Common locations are `grad_meh\{world}\`, `ocap_exporter\{world}\`, and `ingame\{world}\`.
+The raw output is saved in the Arma 3 folder under `RAMET_Output\raw\{world}\`:
+
+| Export | Folder | Contents |
+| --- | --- | --- |
+| Grad_meh | `grad_meh\` | `sat\sat_full.png`, `geojson\`, `dem.asc.gz`, `3d\`, `meta.json`, `preview.png` |
+| In-Game/GMS | `a3me\` | `base.png`, `hires.png`, `aerial.png` and their index JSON files |
+| OCAP | `ocap-rt\` | `{world}.asc`, `{world}.svg`, `map.json`, `ocap_exporter.log` |
+
+The OCAP export only writes those few source files. Its topo tile pyramids are rendered into the same `ocap-rt\` folder by the next step.
 
 ### 4. Turn the raw export into finished tiles
 
@@ -84,6 +92,8 @@ At this point, the export is complete. To copy it into a local planner, specify 
 ```
 
 To create uploadable archives instead, run `@root_amet\batch\05_zip_for_upload.bat` (or add `--bundle` for a combined archive). Zips are saved in `RAMET_Output\_zips\`.
+
+Both steps pack each world's raster tiles (`tiles\<variant>\<z>\<x>\<y>.<ext>`) into a single `{world}\tiles.sqlite`, which is the format the JSOC-OPS-Warlords planner reads. Shipping one file per world instead of hundreds of thousands of loose tiles keeps planner builds, uploads and git fast. Add `--loose` to either step to ship the loose `tiles\` folders instead.
 
 ## Exporting several terrains automatically
 

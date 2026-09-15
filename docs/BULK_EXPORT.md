@@ -35,9 +35,9 @@ with the target terrain enabled and choose the matching spotlight:
 
 | Export | Executable | Output |
 | --- | --- | --- |
-| Grad_meh | Main/stable | `grad_meh\{world}\` |
-| In-Game/GMS | Main/stable | `ingame\{world}\` |
-| OCAP RenderTerrain | Main/stable (64-bit) | `ocap_exporter\{world}\` |
+| Grad_meh | Main/stable | `RAMET_Output\raw\{world}\grad_meh\` |
+| In-Game/GMS | Main/stable | `RAMET_Output\raw\{world}\a3me\` |
+| OCAP RenderTerrain | Main/stable (64-bit) | `RAMET_Output\raw\{world}\ocap-rt\` |
 
 All exporters run on the main branch. The OCAP terrain SVG is written by the
 OCAP extension through the export function in the game executable; on the
@@ -71,7 +71,7 @@ is installed and enabled before the batch starts.
 
 The script resets the Grad_meh state file and launches `arma3_64.exe`. It
 advances through the queue with FlatDevil. Raw output goes to
-`Arma 3\grad_meh\{world}\`.
+`Arma 3\RAMET_Output\raw\{world}\grad_meh\`.
 
 ### OCAP queue
 
@@ -85,7 +85,8 @@ advances through the queue with FlatDevil. Raw output goes to
 The script launches `arma3_x64.exe` (or `arma3diag_x64.exe` when the normal
 64-bit executable is missing). The OCAP stage keeps its own state,
 so it can continue after a crash or a later relaunch. Raw output goes to
-`Arma 3\ocap_exporter\{world}\`.
+`Arma 3\RAMET_Output\raw\{world}\ocap-rt\` (`{world}.asc`, `{world}.svg` and
+`map.json`). `03_postprocess.bat` renders the topo tiles into the same folder.
 
 Progress and completion messages are written to
 `Arma 3\ramet_state\ramet_bulk.log`.
@@ -147,6 +148,13 @@ For a remote planner, create per-world archives:
 
 Use `--bundle` to create one archive. The files go under
 `Arma 3\RAMET_Output\_zips\`.
+
+Both deploy and zip pack each world's loose raster pyramid
+(`tiles\<variant>\<z>\<x>\<y>.<ext>`) into one `{world}\tiles.sqlite` for the
+planner. The processed output in `RAMET_Output\processed\` is not changed. A
+local deploy builds the pack before replacing the planner's world folder, so a
+failed pack leaves the previous deployment in place. Add `--loose` to ship the
+loose `tiles\` folders instead.
 
 ## Partial output
 

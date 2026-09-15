@@ -3,6 +3,7 @@ setlocal EnableExtensions
 
 rem RAMET step 4 — copy <Arma3>\RAMET_Output\processed\ into a user-supplied planner map_tiles\ directory.
 rem Host Python only (deploy_to_planner.py is stdlib-only — no Docker needed).
+rem Raster tiles are packed into {world}\tiles.sqlite; pass --loose to copy loose tiles\ instead.
 
 set "SCRIPT_DIR=%~dp0"
 pushd "%SCRIPT_DIR%.." >nul

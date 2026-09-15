@@ -3,6 +3,7 @@
 # to a remote planner. Pass --bundle to emit a single RAMET_Output_bundle.zip.
 # Native bash reimplementation — host Python only (deploy_to_planner.py --zip is
 # stdlib-only). Works on Linux, WSL, and Git Bash.
+# Raster tiles are packed into {world}/tiles.sqlite inside each zip; pass --loose to zip loose tiles/ instead.
 
 set -euo pipefail
 

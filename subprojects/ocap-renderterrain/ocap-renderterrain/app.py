@@ -133,12 +133,20 @@ for WORLDNAME_PATH in world_list:
     _world_t = time.time()
     print("PROCESSING", WORLDNAME)
 
+    # The RAMET launcher mounts the same raw folder as input and output, so the output
+    # folder can be the input folder. Never wipe the exporter's source files there.
+    SOURCE_FILES = set()
+    if os.path.realpath(OUTPUT_FOLDER) == os.path.realpath(INPUT_FOLDER):
+        SOURCE_FILES = {"map.json", f"{WORLDNAME}.asc", f"{WORLDNAME}.svg", "ocap_exporter.log"}
+
     # delete everything in the temp and output folders wihtout deleting the folder itself
     for TGT_FOLDER in [OUTPUT_FOLDER, TEMP_FOLDER]:
         if not os.path.exists(TGT_FOLDER):
             os.makedirs(TGT_FOLDER)
         else:
             for filename in os.listdir(TGT_FOLDER):
+                if TGT_FOLDER == OUTPUT_FOLDER and filename in SOURCE_FILES:
+                    continue
                 file_path = os.path.join(TGT_FOLDER, filename)
                 if os.path.isfile(file_path) or os.path.islink(file_path):
                     try:
