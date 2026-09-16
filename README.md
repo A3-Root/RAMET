@@ -57,11 +57,34 @@ The OCAP terrain SVG is written by the RAMET OCAP extension, which calls the SVG
 1. Launch Arma 3 with RAMET, CBA, and the target terrain enabled.
 2. On the main menu, open the RAMET spotlight/menu entry. If the menu isn’t visible, check the troubleshooting section below.
 3. Choose one of the following:
+   - **RAMET — Multi-mode export** — tick the exporters you want, pick the terrains, set each exporter's options, then leave it running
    - **RAMET — Grad_meh export**
    - **RAMET — In-Game export (GMS)**
    - **RAMET — OCAP export**
-4. Select the terrain(s) in the picker. Only terrains currently known to Arma can be selected.
+4. Select the terrain(s) in the picker. Only terrains currently known to Arma can be selected. **Cancel** closes the picker and returns you to the main menu.
 5. Start the export and wait for it to finish. Large terrains can take a long time. Do not close Arma or disable the terrain mod while an export is running.
+
+**Multi-mode export** is the unattended option. It asks four things and then
+runs on its own:
+
+1. **Which exporters to run** — tick any combination of Grad_meh, OCAP and
+   In-Game (GMS). On the diagnostics branch only OCAP can be ticked, since the
+   other two need the main branch.
+2. **Which terrains** — the same picker the single-mode tiles use.
+3. **Each ticked exporter's own options**, in turn: Grad_meh and OCAP show their
+   usual options screens, and the In-Game export offers its high-resolution and
+   aerial passes (the topographic pass always runs, because the other two are
+   calibrated from it).
+4. Nothing else. Arma then works through the exporters, loading and ending its
+   own missions, so you can leave the machine alone.
+
+The run order is always Grad_meh, then OCAP, then GMS, whatever order you tick
+them in. Grad_meh and OCAP read map data and are dependable unattended, while
+GMS drives the camera and stitches screenshots, so it goes last — if it does
+misbehave overnight, the other two exports are already on disk.
+
+Progress lines go to the RPT log tagged `[RAMET all]`. Cancel at any of those
+steps drops the whole run and returns you to the main menu.
 
 The raw output is saved in the Arma 3 folder under `RAMET_Output\raw\{world}\`:
 

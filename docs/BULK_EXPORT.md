@@ -38,6 +38,16 @@ with the target terrain enabled and choose the matching spotlight:
 | Grad_meh | Main/stable | `RAMET_Output\raw\{world}\grad_meh\` |
 | In-Game/GMS | Main/stable | `RAMET_Output\raw\{world}\a3me\` |
 | OCAP RenderTerrain | Main/stable (64-bit) | `RAMET_Output\raw\{world}\ocap-rt\` |
+| Multi-mode | Main/stable (64-bit) | whichever of the above you tick |
+
+The **Multi-mode export** spotlight asks which exporters to run, which terrains
+to run them over, and then each exporter's own options — after that it works
+through them with no further input, so you can start it and walk away. The order
+is always Grad_meh, then OCAP, then GMS: the screenshot-driven GMS pass is the
+one most likely to misbehave unattended, so the other two finish first. It needs no `worlds.txt` entry; the picker's selection is the queue. Watch
+the RPT log for `[RAMET all]` lines to see which stage is running. Cancel on any
+of its screens abandons the run. Post-processing still runs separately, through
+`03_postprocess.bat`.
 
 All exporters run on the main branch. The OCAP terrain SVG is written by the
 OCAP extension through the export function in the game executable; on the

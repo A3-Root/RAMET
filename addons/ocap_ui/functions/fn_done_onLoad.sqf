@@ -47,3 +47,13 @@ if !(isNull _textCtrl) then {
 
 diag_log format ["y: %1", _ypos];
 diag_log format ["worlds: %1", (_display getVariable ["ocap_renderterrain_worlds", []])];
+
+// Unattended runs must not stop on this screen: when RAMET's all-modes queue is
+// active, close it after a moment so the mission ends and the next mode starts.
+if (uiNamespace getVariable ["ramet_all_active", false]) then {
+	[_display] spawn {
+		params ["_display"];
+		sleep 5;
+		if (!isNull _display) then { _display closeDisplay 1; };
+	};
+};

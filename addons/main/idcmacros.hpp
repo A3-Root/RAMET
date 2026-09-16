@@ -21,4 +21,12 @@
 
 #define IDC_DIALOG_CONTENT 742123
 
+// Multi-mode export: which exporters to run, then the GMS-specific passes.
+#define IDC_ALL_CHECK_GRAD 501
+#define IDC_ALL_CHECK_GMS 502
+#define IDC_ALL_CHECK_OCAP 503
+
+#define IDC_ALL_CHECK_GMS_HIRES 512
+#define IDC_ALL_CHECK_GMS_AERIAL 513
+
 #endif

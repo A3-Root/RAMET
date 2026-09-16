@@ -14,6 +14,22 @@ private _options = [_exportSat, _exportTopo, _exportBakedTopo, _exportHouses, _e
 
 uiNamespace setVariable ["grad_meh_options", _options];
 
+// RAMET's multi-mode export borrows this dialog to collect Grad_meh's options;
+// it stores them and moves to the next mode instead of exporting now.
+private _collecting = uiNamespace getVariable ["ramet_all_collecting", false];
+
+if (_collecting) exitWith {
+	if (_exitCode isNotEqualTo 1) exitWith {
+		[] call (uiNamespace getVariable "root_amet_fnc_allAbort");
+		diag_log "[RAMET all] Grad_meh options cancelled — returning to the main menu.";
+	};
+	if (_options findIf {_x} isEqualTo -1) exitWith {
+		(displayParent _display) spawn { _this createDisplay "grad_meh_config"; };
+	};
+	uiNamespace setVariable ["ramet_all_opt_grad_meh", _options];
+	[] call (uiNamespace getVariable "root_amet_fnc_allNextOptions");
+};
+
 if (_exitCode isEqualTo 1) then {
 	// user pressed ok
 

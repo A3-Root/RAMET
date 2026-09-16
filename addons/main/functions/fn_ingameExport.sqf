@@ -132,6 +132,7 @@ uiNamespace setVariable ["ramet_ingame_fnc_startMission", {
 				private _zero = findDisplay 0;
 				{ if (_x != _zero) then { _x closeDisplay 1; }; } forEach allDisplays;
 
+				private _chained = false;
 				if (_nextIndex < count _maps) then {
 					uiNamespace setVariable ["ramet_ingame_autoCloseDebriefing", true];
 					[_maps select _nextIndex] call (uiNamespace getVariable "ramet_ingame_fnc_startMission");
@@ -140,9 +141,19 @@ uiNamespace setVariable ["ramet_ingame_fnc_startMission", {
 					uiNamespace setVariable ["ramet_ingame_index", nil];
 					diag_log "[RAMET ingame]: Bulk export complete.";
 					systemChat "[RAMET ingame]: Bulk export complete.";
+
+					// RAMET's multi-mode export hands over from here while this
+					// mission is still running. GMS runs last, so this normally
+					// just closes the queue out.
+					if (uiNamespace getVariable ["ramet_all_active", false]) then {
+						_chained = [] call (uiNamespace getVariable "root_amet_fnc_allChainNext");
+					};
 				};
 
-				call (uiNamespace getVariable "ramet_ingame_fnc_endWithDiag");
+				// The next mode ends this mission itself.
+				if (!_chained) then {
+					call (uiNamespace getVariable "ramet_ingame_fnc_endWithDiag");
+				};
 			};
 		},
 		missionConfigFile,

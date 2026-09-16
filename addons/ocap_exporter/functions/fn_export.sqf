@@ -71,6 +71,7 @@ uiNamespace setVariable ["ocap_renderterrain_fnc_startMission", {
 					};
 				} forEach allDisplays;
 
+				private _chained = false;
 				if (_nextIndex < count _maps) then {
 					uiNamespace setVariable ["ramet_ingame_autoCloseDebriefing", true];
 					[_maps select _nextIndex] call (uiNamespace getVariable "ocap_renderterrain_fnc_startMission");
@@ -79,10 +80,20 @@ uiNamespace setVariable ["ocap_renderterrain_fnc_startMission", {
 					uiNamespace setVariable ["ocap_renderterrain_index", nil];
 					diag_log "[OCAP RenderTerrain]: Bulk export finished";
 					systemChat "[OCAP RenderTerrain]: Bulk export finished";
+
+					// RAMET's multi-mode export hands over to the next mode from
+					// here, while this mission is still running — the main menu
+					// has no scheduler to resume a spawned script.
+					if (uiNamespace getVariable ["ramet_all_active", false]) then {
+						_chained = [] call (uiNamespace getVariable "root_amet_fnc_allChainNext");
+					};
 				};
 
-				uiNamespace setVariable ["ramet_ingame_autoCloseDebriefing", true];
-				failMission "END1";
+				// The next mode ends this mission itself.
+				if (!_chained) then {
+					uiNamespace setVariable ["ramet_ingame_autoCloseDebriefing", true];
+					failMission "END1";
+				};
 			};
 		},
 		missionConfigFile,

@@ -21,6 +21,12 @@ addMissionEventHandler ["ExtensionCallback", {
 
 root_amet_a3me_export = {
 
+	// Optional passes, set by RAMET's multi-mode export. A standalone GMS export
+	// leaves this unset and runs everything, as it always has. The topographic
+	// pass is not optional: it also produces the calibration these two need.
+	private _passes = uiNamespace getVariable ["ramet_a3me_passes", [true, true]];
+	_passes params [["_doHiRes", true], ["_doAerial", true]];
+
 	systemChat "Taking screenshots...";
 
 	INFO("Export");
@@ -55,8 +61,8 @@ root_amet_a3me_export = {
 	INFO("Stop");
 	"mapExportExtension" callExtension ["stop", [worldName, worldSize]];
 
-	if ( worldSize < 40960 ) then {
-	
+	if ( _doHiRes && worldSize < 40960 ) then {
+
 		systemChat "Taking screenshots for HiRes...";
 
 		INFO("Start");
@@ -79,7 +85,7 @@ root_amet_a3me_export = {
 	closeDialog 0;
 
 	// RAMET: aerial orthographic imagery pass (cherry-picked from upstream v2.2.0).
-	if ( worldSize < 40960 ) then {
+	if ( _doAerial && worldSize < 40960 ) then {
 
 		systemChat "Taking aerial screenshots...";
 

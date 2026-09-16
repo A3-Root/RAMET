@@ -21,25 +21,8 @@ if (_exitCode isEqualTo 1) then {
 		(displayParent _display) spawn { _this createDisplay "ocap_renderterrain_config"; };
 	};
 } else {
-	// user pressed cancel
-	[displayParent _display] spawn {
-		params ["_parent"];
-
-		if (isNil "BIS_fnc_guiMessage") exitWith {
-			_parent createDisplay "ocap_renderterrain_main";
-		};
-
-		private _result = [
-			"Are you sure you want to quit OCAP RenderTerrain?", 
-			"Quit OCAP RenderTerrain",
-			true,
-			true,
-			_parent
-		] call (uiNamespace getVariable "BIS_fnc_guiMessage");
-
-		if (_result) exitWith {};
-
-		// create loading display
-		_parent createDisplay "ocap_renderterrain_main";
-	};
+	// User pressed Cancel: let the display close and fall back to whatever
+	// opened it (the main menu). Re-creating the picker here is what used to
+	// make Cancel look like it did nothing.
+	diag_log "[OCAP RenderTerrain] Map selection cancelled — returning to the main menu.";
 };
