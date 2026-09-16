@@ -927,6 +927,7 @@ void writeGeojsons(arma_file_formats::cxx::OprwCxx& wrp, std::filesystem::path& 
 
             bool foundGeoLod = false;
             bool foundMemoryLod = false;
+            bool foundVisualLod = false;
             for (auto& res : odol2.resolutions)
             {
                 if (res.res == arma_file_formats::cxx::ResolutionEnumCxx::Geometry) {
@@ -935,16 +936,28 @@ void writeGeojsons(arma_file_formats::cxx::OprwCxx& wrp, std::filesystem::path& 
                 else if (res.res == arma_file_formats::cxx::ResolutionEnumCxx::Memory) {
                     foundMemoryLod = true;
                 }
-                if (foundGeoLod && foundMemoryLod) {
-                    break;
+                else if (res.res == arma_file_formats::cxx::ResolutionEnumCxx::GraphicalLod) {
+                    foundVisualLod = true;
                 }
+            }
+
+            // The 3D planner view wants the shape players actually see. read_lod
+            // returns the first resolution of the requested kind, which for
+            // GraphicalLod is the most detailed visual LOD. The Geometry LOD is
+            // only a collision hull — usable as a fallback, but boxy.
+            if (foundVisualLod)
+            {
+                auto visualLod = odol_reader->read_lod(arma_file_formats::cxx::ResolutionEnumCxx::GraphicalLod);
+                setModel3DMesh(models3d[i], visualLod);
             }
 
             if (foundGeoLod)
             {
                 lod = odol_reader->read_lod(arma_file_formats::cxx::ResolutionEnumCxx::Geometry);
                 rvffIndex = 1;
-                setModel3DMesh(models3d[i], lod);
+                if (models3d[i].indices.empty()) {
+                    setModel3DMesh(models3d[i], lod);
+                }
 
                 for (auto& prop : lod.named_properties) {
                     if (static_cast<std::string>(prop.property) == "map")
@@ -952,6 +965,9 @@ void writeGeojsons(arma_file_formats::cxx::OprwCxx& wrp, std::filesystem::path& 
                         auto val = static_cast<std::string>(prop.value);
                         models3d[i].mapType = boost::algorithm::to_lower_copy(val);
                         if ((val == "railway" || val == "road" || val == "track" || val == "main road") && foundMemoryLod) {
+                            // Roads are drawn in 2D from their Memory LOD points;
+                            // the 3D mesh above is left alone, because a point set
+                            // has no surface to render.
                             lod = odol_reader->read_lod(arma_file_formats::cxx::ResolutionEnumCxx::Memory);
                             rvffIndex = 2;
                         }
@@ -1018,6 +1034,7 @@ void writeGeojsons(arma_file_formats::cxx::OprwCxx& wrp, std::filesystem::path& 
 
     writeRiver(wrp, basePathGeojson);
 
+    buildModel3DVoxels(models3d);
     write3dData(wrp, models3d, basePathGeojson.parent_path() / "3d");
 
 }

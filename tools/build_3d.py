@@ -27,12 +27,15 @@ from pathlib import Path
 
 import numpy as np
 
-SCHEMA = "ramet-3d-1"
+SCHEMA = "ramet-3d-2"
 CHUNK_CELLS = 128
 OVERVIEW_MAX_SAMPLES = 1025
 # Models whose largest visual extent is below this (metres) are skipped: clutter,
 # helpers and proxies that are invisible at planner zoom levels.
 MIN_MODEL_EXTENT = 0.75
+# Triangles per model kept in the real-mesh stream. A model over budget ships its
+# voxel proxy only, so one dense interior LOD cannot inflate models.bin.
+DEFAULT_MESH_BUDGET = 20000
 
 OBJECT_DTYPE = np.dtype([("model", "<u4"), ("t", "<f4", (12,))])
 
@@ -146,7 +149,8 @@ def _write_heights(grid: np.ndarray, cellsize: float, out_dir: Path) -> dict:
     }
 
 
-def _write_objects(raw_3d: Path, chunk_size_m: float, chunks_x: int, chunks_y: int, out_dir: Path) -> dict | None:
+def _write_objects(raw_3d: Path, chunk_size_m: float, chunks_x: int, chunks_y: int, out_dir: Path,
+                   mesh_budget: int = DEFAULT_MESH_BUDGET) -> dict | None:
     meta_path = raw_3d / "models.json"
     models_bin = raw_3d / "models.bin"
     objects_bin = raw_3d / "objects.bin"
@@ -173,12 +177,33 @@ def _write_objects(raw_3d: Path, chunk_size_m: float, chunks_x: int, chunks_y: i
     remap[used] = np.arange(len(used))
 
     out_models = []
+    mesh_bytes = 0
+    voxel_bytes = 0
+    mesh_models = 0
+    voxel_models = 0
+    over_budget = 0
     with open(out_dir / "models.bin", "wb") as fh:
         offset = 0
+
+        def copy_stream(src_v_off: int, v_count: int, src_i_off: int, i_count: int) -> tuple[int, int, int, int]:
+            """Copy one vertex+index pair out of the raw blob. Returns the new offsets."""
+            nonlocal offset
+            verts = bytes(mesh_blob[src_v_off: src_v_off + v_count * 12])
+            idx = bytes(mesh_blob[src_i_off: src_i_off + i_count * 4])
+            v_at = offset
+            fh.write(verts)
+            offset += len(verts)
+            i_at = offset
+            fh.write(idx)
+            offset += len(idx)
+            return v_at, v_count, i_at, i_count
+
         for new_id, old_id in enumerate(used.tolist()):
             m = raw_models[old_id]
             v_count = int(m.get("vertexCount", 0))
             i_count = int(m.get("indexCount", 0))
+            vox_v_count = int(m.get("voxelVertexCount", 0))
+            vox_i_count = int(m.get("voxelIndexCount", 0))
             entry = {
                 "id": new_id,
                 "path": m.get("path", ""),
@@ -186,20 +211,28 @@ def _write_objects(raw_3d: Path, chunk_size_m: float, chunks_x: int, chunks_y: i
                 "bboxMin": m.get("bboxMin", [0, 0, 0]),
                 "bboxMax": m.get("bboxMax", [0, 0, 0]),
                 "vertexOffset": 0, "vertexCount": 0, "indexOffset": 0, "indexCount": 0,
+                "voxelVertexOffset": 0, "voxelVertexCount": 0,
+                "voxelIndexOffset": 0, "voxelIndexCount": 0,
+                "voxelSize": float(m.get("voxelSize", 0.0)),
             }
             if mesh_blob is not None and v_count and i_count:
-                v_off = int(m["vertexOffset"])
-                i_off = int(m["indexOffset"])
-                verts = bytes(mesh_blob[v_off: v_off + v_count * 12])
-                idx = bytes(mesh_blob[i_off: i_off + i_count * 4])
-                entry["vertexOffset"] = offset
-                entry["vertexCount"] = v_count
-                fh.write(verts)
-                offset += len(verts)
-                entry["indexOffset"] = offset
-                entry["indexCount"] = i_count
-                fh.write(idx)
-                offset += len(idx)
+                if mesh_budget and i_count // 3 > mesh_budget and vox_v_count and vox_i_count:
+                    # Too dense to ship; the voxel proxy below stands in for it.
+                    over_budget += 1
+                else:
+                    before = offset
+                    (entry["vertexOffset"], entry["vertexCount"],
+                     entry["indexOffset"], entry["indexCount"]) = copy_stream(
+                        int(m["vertexOffset"]), v_count, int(m["indexOffset"]), i_count)
+                    mesh_bytes += offset - before
+                    mesh_models += 1
+            if mesh_blob is not None and vox_v_count and vox_i_count:
+                before = offset
+                (entry["voxelVertexOffset"], entry["voxelVertexCount"],
+                 entry["voxelIndexOffset"], entry["voxelIndexCount"]) = copy_stream(
+                    int(m["voxelVertexOffset"]), vox_v_count, int(m["voxelIndexOffset"]), vox_i_count)
+                voxel_bytes += offset - before
+                voxel_models += 1
             out_models.append(entry)
     (out_dir / "models.json").write_text(json.dumps(out_models), encoding="utf-8")
 
@@ -236,10 +269,18 @@ def _write_objects(raw_3d: Path, chunk_size_m: float, chunks_x: int, chunks_y: i
         "recordBytes": records.dtype.itemsize,
         "count": int(len(records)),
         "chunkCounts": counts,
+        "hasMesh": mesh_models > 0,
+        "hasVoxel": voxel_models > 0,
+        "meshModels": mesh_models,
+        "voxelModels": voxel_models,
+        "meshBytes": mesh_bytes,
+        "voxelBytes": voxel_bytes,
+        "meshTriangleBudget": int(mesh_budget),
+        "meshOverBudget": over_budget,
     }
 
 
-def build_3d(world_out: Path, grad_dir: Path | None) -> dict | None:
+def build_3d(world_out: Path, grad_dir: Path | None, mesh_budget: int = DEFAULT_MESH_BUDGET) -> dict | None:
     """Build <world_out>/3d. Returns the terrain3d block for map.json, or None without a DEM."""
     dem = world_out / "dem" / "dem.asc.gz"
     if not dem.exists():
@@ -259,7 +300,8 @@ def build_3d(world_out: Path, grad_dir: Path | None) -> dict | None:
     chunks = terrain["heights"]["chunks"]
     objects = None
     if grad_dir is not None:
-        objects = _write_objects(Path(grad_dir) / "3d", chunks["size"], chunks["countX"], chunks["countY"], out_dir)
+        objects = _write_objects(Path(grad_dir) / "3d", chunks["size"], chunks["countX"], chunks["countY"],
+                                 out_dir, mesh_budget)
     if objects is not None:
         terrain["objects"] = objects
 
@@ -268,6 +310,8 @@ def build_3d(world_out: Path, grad_dir: Path | None) -> dict | None:
         "schema": SCHEMA,
         "path": "3d/terrain.json",
         "hasObjects": objects is not None,
+        "hasVoxel": bool(objects and objects.get("hasVoxel")),
+        "hasMesh": bool(objects and objects.get("hasMesh")),
     }
 
 
@@ -275,8 +319,10 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("world_out", type=Path, help="processed world directory (contains dem/)")
     ap.add_argument("--grad-dir", type=Path, default=None, help="raw grad_meh directory (contains 3d/)")
+    ap.add_argument("--mesh-budget", type=int, default=DEFAULT_MESH_BUDGET,
+                    help="max triangles per model in the real-mesh stream (0 disables the limit)")
     args = ap.parse_args()
-    block = build_3d(args.world_out, args.grad_dir)
+    block = build_3d(args.world_out, args.grad_dir, args.mesh_budget)
     if block is None:
         print("no DEM found; nothing built")
         return 1

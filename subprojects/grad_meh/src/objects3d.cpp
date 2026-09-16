@@ -1,6 +1,11 @@
 #include "objects3d.h"
 
+#include "voxelize.h"
+
+#include <algorithm>
+#include <atomic>
 #include <fstream>
+#include <thread>
 
 #include <nlohmann/json.hpp>
 #include <plog/Log.h>
@@ -46,6 +51,56 @@ void setModel3DMesh(Model3D& model, const arma_file_formats::cxx::LodCxx& geomet
     }
 }
 
+void setModel3DVoxels(Model3D& model, float targetVoxelSize)
+{
+    auto voxels = buildVoxelMesh(model.vertices, model.indices, targetVoxelSize);
+    model.voxelVertices = std::move(voxels.vertices);
+    model.voxelIndices = std::move(voxels.indices);
+    model.voxelSize = voxels.voxelSize;
+}
+
+void buildModel3DVoxels(std::vector<Model3D>& models, float targetVoxelSize)
+{
+    if (models.empty()) {
+        return;
+    }
+
+    unsigned int workers = std::thread::hardware_concurrency();
+    if (workers == 0) {
+        workers = 1;
+    }
+    workers = std::min<unsigned int>(workers, static_cast<unsigned int>(models.size()));
+
+    std::atomic<size_t> next{0};
+    const auto work = [&]() {
+        for (;;) {
+            const size_t i = next.fetch_add(1);
+            if (i >= models.size()) {
+                return;
+            }
+            setModel3DVoxels(models[i], targetVoxelSize);
+        }
+    };
+
+    std::vector<std::thread> threads;
+    threads.reserve(workers - 1);
+    for (unsigned int i = 1; i < workers; i++) {
+        threads.emplace_back(work);
+    }
+    work();
+    for (auto& thread : threads) {
+        thread.join();
+    }
+
+    size_t built = 0;
+    for (const auto& model : models) {
+        if (!model.voxelIndices.empty()) {
+            built++;
+        }
+    }
+    PLOG_INFO << "3D data: voxel proxies built for " << built << " of " << models.size() << " models";
+}
+
 void write3dData(const arma_file_formats::cxx::OprwCxx& wrp, const std::vector<Model3D>& models,
                  const fs::path& basePath3d)
 {
@@ -72,6 +127,17 @@ void write3dData(const arma_file_formats::cxx::OprwCxx& wrp, const std::vector<M
         modelsBin.write(reinterpret_cast<const char*>(model.indices.data()),
                         static_cast<std::streamsize>(model.indices.size() * sizeof(uint32_t)));
         offset += model.indices.size() * sizeof(uint32_t);
+        entry["voxelSize"] = model.voxelSize;
+        entry["voxelVertexOffset"] = offset;
+        entry["voxelVertexCount"] = model.voxelVertices.size() / 3;
+        modelsBin.write(reinterpret_cast<const char*>(model.voxelVertices.data()),
+                        static_cast<std::streamsize>(model.voxelVertices.size() * sizeof(float)));
+        offset += model.voxelVertices.size() * sizeof(float);
+        entry["voxelIndexOffset"] = offset;
+        entry["voxelIndexCount"] = model.voxelIndices.size();
+        modelsBin.write(reinterpret_cast<const char*>(model.voxelIndices.data()),
+                        static_cast<std::streamsize>(model.voxelIndices.size() * sizeof(uint32_t)));
+        offset += model.voxelIndices.size() * sizeof(uint32_t);
         modelsJson.push_back(entry);
     }
     modelsBin.close();
@@ -97,7 +163,8 @@ void write3dData(const arma_file_formats::cxx::OprwCxx& wrp, const std::vector<M
     objectsBin.close();
 
     nl::json meta;
-    meta["schema"] = "ramet-3d-raw-1";
+    meta["schema"] = "ramet-3d-raw-2";
+    meta["voxelTargetSize"] = VOXEL_TARGET_SIZE;
     meta["objectRecordBytes"] = 52;
     meta["objectCount"] = written;
     meta["models"] = modelsJson;

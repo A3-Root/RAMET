@@ -93,6 +93,13 @@ At this point, the export is complete. To copy it into a local planner, specify 
 
 To create uploadable archives instead, run `@root_amet\batch\05_zip_for_upload.bat` (or add `--bundle` for a combined archive). Zips are saved in `RAMET_Output\_zips\`.
 
+The 3D data for each world holds two versions of every object: the model's own
+triangles, taken from its most detailed visual LOD, and a blocky voxel proxy of
+that shape. The planner's 3D view has a **Shape** switch between them; voxel is
+the default because it stays readable without textures and draws far faster.
+Pass `--mesh-budget` to `tools/build_3d.py` to change how many triangles a model
+may contribute before it ships as voxels only (default 20000, `0` disables it).
+
 Both steps pack each world's raster tiles (`tiles\<variant>\<z>\<x>\<y>.<ext>`) into a single `{world}\tiles.sqlite`, which is the format the JSOC-OPS-Warlords planner reads. Shipping one file per world instead of hundreds of thousands of loose tiles keeps planner builds, uploads and git fast. Add `--loose` to either step to ship the loose `tiles\` folders instead.
 
 ## Exporting several terrains automatically

@@ -115,7 +115,8 @@ debug tooling.
 ## `terrain3d`
 
 ```jsonc
-{ "schema": "ramet-3d-1", "path": "3d/terrain.json", "hasObjects": true }
+{ "schema": "ramet-3d-2", "path": "3d/terrain.json", "hasObjects": true,
+  "hasVoxel": true, "hasMesh": true }
 ```
 
 Written by `tools/build_3d.py` from the DEM and the grad_meh `3d/` export
@@ -130,11 +131,27 @@ Written by `tools/build_3d.py` from the DEM and the grad_meh `3d/` export
   `(i * cellSize, j * cellSize)`.
 - `objects` (only with grad_meh data): `models` (`3d/models.json`, one entry per
   used model with `category`, visual `bboxMin`/`bboxMax` and offsets into
-  `3d/models.bin`, which holds the Geometry LOD as float32 xyz vertices followed by
-  uint32 triangle indices, model space x right / y up / z forward) and `path`
-  (`3d/objects/{cx}_{cy}.bin`, 52-byte records: uint32 model id, float32 east,
-  north, height ASL, float32[9] model axes `_0`, `_1`, `_2`). Objects use the same
-  chunk grid as the heights.
+  `3d/models.bin`) and `path` (`3d/objects/{cx}_{cy}.bin`, 52-byte records:
+  uint32 model id, float32 east, north, height ASL, float32[9] model axes `_0`,
+  `_1`, `_2`). Objects use the same chunk grid as the heights.
+
+  Each model carries up to two geometry streams in `3d/models.bin`, both stored
+  as float32 xyz vertices followed by uint32 triangle indices in model space
+  (x right, y up, z forward):
+
+  | Stream | Offsets | Source |
+  | --- | --- | --- |
+  | Mesh | `vertexOffset`/`vertexCount`, `indexOffset`/`indexCount` | the model's most detailed visual LOD, or its Geometry LOD when it has no visual one |
+  | Voxel | `voxelVertexOffset`/`voxelVertexCount`, `voxelIndexOffset`/`voxelIndexCount` | a blocky proxy of that mesh at `voxelSize` metres per cell |
+
+  A count of 0 means the model does not carry that stream: a model over
+  `--mesh-budget` triangles ships voxel-only, and a model the voxelizer could
+  not process ships mesh-only. `objects.hasMesh`/`objects.hasVoxel` report which
+  streams exist for the map as a whole, alongside `meshModels`, `voxelModels`,
+  `meshBytes`, `voxelBytes`, `meshTriangleBudget` and `meshOverBudget`.
+
+  Schema `ramet-3d-1` had the mesh stream only, taken from the Geometry LOD, and
+  no voxel fields. Readers should treat the voxel fields as absent there.
 
 ## `source.json`
 
