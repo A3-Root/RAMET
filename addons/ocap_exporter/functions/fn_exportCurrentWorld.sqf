@@ -224,11 +224,16 @@ if (isNil "CBA_fnc_encodeJSON") then {
     private _mapSource = configSourceMod (configFile >> "CfgWorlds" >> worldName);
     private _mapAddonSearch = getLoadedModsInfo select { _x#1 == _mapSource};
     if (count _mapAddonSearch isNotEqualTo 0) then {
-        private _mapAddon = _mapAddonSearch#0;
-        private _mapAddonId = _mapAddon#7;
-        private _isOfficial = _mapAddon#3;
+        // getLoadedModsInfo entries are
+        // [name, dir, isDefault, isOfficial, origin, hash, hashShort, itemID],
+        // and itemID is a STRING ("450814997", or "0" for the base game).
+        // Comparing it against the number 0 threw a generic error here, which
+        // aborted the whole export before the SVG was ever written.
+        (_mapAddonSearch#0) params [
+            "", "", "", ["_isOfficial", false, [false]], "", "", "", ["_mapAddonId", "", [""]]
+        ];
         private _addonBaseUrl = ["https://steamcommunity.com/workshop/filedetails/?id=","https://store.steampowered.com/app/"] select _isOfficial;
-        if (_mapAddonId != 0) then {
+        if (_mapAddonId != "" && _mapAddonId != "0") then {
             ocap_exporter_metadata set ["addonUrl", format ["%1%2", _addonBaseUrl, _mapAddonId]];
         };
     };
