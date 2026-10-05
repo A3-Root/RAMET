@@ -14,6 +14,7 @@ diag_log text format["Initializing Intercept"];
 private _res = "intercept" callExtension "init:";
 diag_log text format["Intercept initialization part 1/3: %1", _res];
 _res = "intercept" callExtension format["init_patch:%1", (productVersion select 3)]; // find a patch
+diag_log text format["Intercept patch lookup for build %1: %2", (productVersion select 3), _res];
 "intercept" callExtension "invoker_begin_register:";
 
 

@@ -38,7 +38,11 @@ trap {
         Stop-Transcript | Out-Null
         $script:TranscriptActive = $false
     }
-    throw
+    # A bare `throw` here does not re-throw $_ — outside a catch block PowerShell
+    # raises its own "ScriptHalted" error, which buried the real message under a
+    # second stack trace pointing at this line. The message is already printed
+    # above, so just terminate with a non-zero exit code.
+    exit 1
 }
 
 $Clean = $false

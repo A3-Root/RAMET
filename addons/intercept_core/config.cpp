@@ -34,7 +34,11 @@ class CfgFunctions {
 #define QUOTE(var1) #var1
 #define ARR_2(ARG1,ARG2) ARG1, ARG2
 #define EVENT_ARGS(x) rv_event:##x
-#define EH_CLASS_DEF(x,y) class Extended_##y##_EventHandlers { \
+// x = intercept event name, y = the engine/XEH event handler name (the inner
+// entry, which must keep its own casing), z = the PascalCase form CBA uses for
+// the Extended_*_EventHandlers class. z is passed separately because the
+// preprocessor cannot change the case of y.
+#define EH_CLASS_DEF(x,y,z) class Extended_##z##_EventHandlers { \
     class All { \
         class Intercept { \
             y = QUOTE([ARR_2('x',_this)] call (uiNamespace getVariable 'intercept_fnc_event');); \
@@ -42,52 +46,52 @@ class CfgFunctions {
     }; \
 }
 
-EH_CLASS_DEF(anim_changed,animChanged);
-EH_CLASS_DEF(anim_done,animDone);
-EH_CLASS_DEF(anim_state_changed,animStateChanged);
-EH_CLASS_DEF(container_closed,containerClosed);
-EH_CLASS_DEF(container_opened,containerOpened);
-EH_CLASS_DEF(controls_shifted,controlsShifted);
-EH_CLASS_DEF(dammaged,dammaged);
-EH_CLASS_DEF(engine,engine);
-EH_CLASS_DEF(epe_contact,epeContact);
-EH_CLASS_DEF(epe_contact_end,epeContactEnd);
-EH_CLASS_DEF(epe_contact_start,epeContactStart);
-EH_CLASS_DEF(explosion,explosion);
-EH_CLASS_DEF(fired,firedBIS);
-EH_CLASS_DEF(fired_near,firedNear);
-EH_CLASS_DEF(fuel,fuel);
-EH_CLASS_DEF(gear,gear);
-EH_CLASS_DEF(get_in,getIn);
-EH_CLASS_DEF(get_out,getOut);
-EH_CLASS_DEF(handle_heal,handleHeal);
-EH_CLASS_DEF(hit,hit);
-EH_CLASS_DEF(hit_part,hitPart);
-EH_CLASS_DEF(init,init);
-EH_CLASS_DEF(incoming_missile,incomingMissile);
-EH_CLASS_DEF(inventory_closed,inventoryClosed);
-EH_CLASS_DEF(inventory_opened,inventoryOpened);
-EH_CLASS_DEF(killed,killed);
-EH_CLASS_DEF(landed_touch_down,landedTouchDown);
-EH_CLASS_DEF(landed_stopped,landedStopped);
-EH_CLASS_DEF(local,local);
-EH_CLASS_DEF(put,put);
-EH_CLASS_DEF(respawn,respawn);
-EH_CLASS_DEF(seat_switched,seatSwitched);
-EH_CLASS_DEF(sound_played,soundPlayed);
-EH_CLASS_DEF(take,take);
-EH_CLASS_DEF(weapon_assembled,weaponAssembled);
-EH_CLASS_DEF(weapon_disassembled,weaponDisassembled);
+EH_CLASS_DEF(anim_changed,animChanged,AnimChanged);
+EH_CLASS_DEF(anim_done,animDone,AnimDone);
+EH_CLASS_DEF(anim_state_changed,animStateChanged,AnimStateChanged);
+EH_CLASS_DEF(container_closed,containerClosed,ContainerClosed);
+EH_CLASS_DEF(container_opened,containerOpened,ContainerOpened);
+EH_CLASS_DEF(controls_shifted,controlsShifted,ControlsShifted);
+EH_CLASS_DEF(dammaged,dammaged,Dammaged);
+EH_CLASS_DEF(engine,engine,Engine);
+EH_CLASS_DEF(epe_contact,epeContact,EpeContact);
+EH_CLASS_DEF(epe_contact_end,epeContactEnd,EpeContactEnd);
+EH_CLASS_DEF(epe_contact_start,epeContactStart,EpeContactStart);
+EH_CLASS_DEF(explosion,explosion,Explosion);
+EH_CLASS_DEF(fired,firedBIS,FiredBIS);
+EH_CLASS_DEF(fired_near,firedNear,FiredNear);
+EH_CLASS_DEF(fuel,fuel,Fuel);
+EH_CLASS_DEF(gear,gear,Gear);
+EH_CLASS_DEF(get_in,getIn,GetIn);
+EH_CLASS_DEF(get_out,getOut,GetOut);
+EH_CLASS_DEF(handle_heal,handleHeal,HandleHeal);
+EH_CLASS_DEF(hit,hit,Hit);
+EH_CLASS_DEF(hit_part,hitPart,HitPart);
+EH_CLASS_DEF(init,init,Init);
+EH_CLASS_DEF(incoming_missile,incomingMissile,IncomingMissile);
+EH_CLASS_DEF(inventory_closed,inventoryClosed,InventoryClosed);
+EH_CLASS_DEF(inventory_opened,inventoryOpened,InventoryOpened);
+EH_CLASS_DEF(killed,killed,Killed);
+EH_CLASS_DEF(landed_touch_down,landedTouchDown,LandedTouchDown);
+EH_CLASS_DEF(landed_stopped,landedStopped,LandedStopped);
+EH_CLASS_DEF(local,local,Local);
+EH_CLASS_DEF(put,put,Put);
+EH_CLASS_DEF(respawn,respawn,Respawn);
+EH_CLASS_DEF(seat_switched,seatSwitched,SeatSwitched);
+EH_CLASS_DEF(sound_played,soundPlayed,SoundPlayed);
+EH_CLASS_DEF(take,take,Take);
+EH_CLASS_DEF(weapon_assembled,weaponAssembled,WeaponAssembled);
+EH_CLASS_DEF(weapon_disassembled,weaponDisassembled,WeaponDisassembled);
 
 // These events don't have XEH on CBA yet
-//EH_CLASS_DEF(handle_damage,handleDamage);
-//EH_CLASS_DEF(handle_rating,handleRating);
-//EH_CLASS_DEF(handle_score,handleScore);
-//EH_CLASS_DEF(post_reset,postReset);
-//EH_CLASS_DEF(rope_attach,ropeAttach);
-//EH_CLASS_DEF(rope_break,ropeBreak);
-//EH_CLASS_DEF(task_set_as_current,taskSetAsCurrent);
-//EH_CLASS_DEF(weapon_deployed,weaponDeployed);
+//EH_CLASS_DEF(handle_damage,handleDamage,HandleDamage);
+//EH_CLASS_DEF(handle_rating,handleRating,HandleRating);
+//EH_CLASS_DEF(handle_score,handleScore,HandleScore);
+//EH_CLASS_DEF(post_reset,postReset,PostReset);
+//EH_CLASS_DEF(rope_attach,ropeAttach,RopeAttach);
+//EH_CLASS_DEF(rope_break,ropeBreak,RopeBreak);
+//EH_CLASS_DEF(task_set_as_current,taskSetAsCurrent,TaskSetAsCurrent);
+//EH_CLASS_DEF(weapon_deployed,weaponDeployed,WeaponDeployed);
 //EH_CLASS_DEF(weapon_rested,weaponRested);
 /*
 class Intercept {
