@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Find the hemtt-built root_amet zip, tag/release it on GitHub (idempotent),
 and prune old releases beyond the retention count. Expects `hemtt release` to
-have already run and GH_TOKEN to be set for `gh`.
+have already run and GH_TOKEN to be set for `gh`. `--dry-run` only reports what
+would be released.
 """
 from __future__ import annotations
 
@@ -74,10 +75,17 @@ def prune_old_releases() -> None:
         run("gh", "release", "delete", tag, "--yes", "--cleanup-tag", check=False)
 
 
+DRY_RUN = "--dry-run" in sys.argv
+
+
 def main() -> None:
     zip_path, version_str = find_release_zip()
     tag = f"v{version_str}"
     print(f"[auto_release] release artifact: {zip_path.name} (tag {tag})")
+
+    if DRY_RUN:
+        print(f"[auto_release] dry run: would create GitHub release {tag} (RAMET {tag}) with generated notes")
+        return
 
     if tag in existing_tags():
         print(f"[auto_release] {tag} already released — nothing to do.")
