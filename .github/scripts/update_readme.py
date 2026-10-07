@@ -10,6 +10,7 @@ import argparse
 import re
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -102,9 +103,14 @@ def commit_and_push() -> None:
         return
 
     run("git", "commit", "-m", "chore: update release badge [skip ci]")
-    push = run("git", "push", check=False)
-    if push.returncode != 0:
-        print(f"[update_readme] WARN: push failed: {push.stderr.strip()}")
+    # GitHub occasionally refuses a ref update right after another push; re-sync and retry
+    for attempt in range(1, 5):
+        push = run("git", "push", check=False)
+        if push.returncode == 0:
+            return
+        print(f"[update_readme] WARN: push failed (attempt {attempt}/4): {push.stderr.strip()}")
+        time.sleep(5 * attempt)
+        run("git", "pull", "--rebase", "origin", "master", check=False)
 
 
 def main() -> None:
