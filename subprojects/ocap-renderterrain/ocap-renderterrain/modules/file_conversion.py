@@ -151,6 +151,32 @@ def preprocess_svg(in_file, out_file):
                     forest_borders_root.remove(forestborder)
             print("Removed", len(forest_border_els), "forest borders")
 
+    # rocks + rocksBorder get no culling from the forest/tree checks above. Terrains with
+    # dense rock layers (sws_twinlakes: ~568k polygons + ~567k border lines, all gradient
+    # paint servers) leave Inkscape rendering a single PNG for days. Cull past the threshold.
+    ROCK_THRESHOLD = 250000
+    rocks_root = svg_root.find("./{http://www.w3.org/2000/svg}g[@id='rocks']")
+    if rocks_root is not None:
+        rock_polygon_els = rocks_root.findall("./{http://www.w3.org/2000/svg}polygon")
+        rock_borders_root = rocks_root.find(
+            "./{http://www.w3.org/2000/svg}g[@id='rocksBorder']"
+        )
+        rock_border_els = (
+            rock_borders_root.findall("./{http://www.w3.org/2000/svg}line")
+            if rock_borders_root is not None
+            else []
+        )
+        print("Rock count:", len(rock_polygon_els))
+        print("Rock border count:", len(rock_border_els))
+        if len(rock_polygon_els) > ROCK_THRESHOLD:
+            print(f"Warning: Rock count exceeds {ROCK_THRESHOLD}. Removing rocks.")
+            for rock in rock_polygon_els:
+                rocks_root.remove(rock)
+        if len(rock_border_els) > ROCK_THRESHOLD:
+            print(f"Warning: Rock border count exceeds {ROCK_THRESHOLD}. Removing rock borders.")
+            for rockborder in rock_border_els:
+                rock_borders_root.remove(rockborder)
+
     # breakpoint()
 
     print("Processing countLines...")
