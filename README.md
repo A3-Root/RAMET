@@ -123,6 +123,31 @@ the default because it stays readable without textures and draws far faster.
 Pass `--mesh-budget` to `tools/build_3d.py` to change how many triangles a model
 may contribute before it ships as voxels only (default 20000, `0` disables it).
 
+### Objects the terrain does not place
+
+A world's 3D data only covers the models its own terrain places. Anything a
+mission adds — vehicles, units, Zeus-placed buildings from any mod — is in no
+terrain, so the planner has no geometry for it and falls back to a plain box.
+
+The model library fixes that. It is built once from the modpack and uploaded to
+the planner, and it is independent of any map, so adding terrains later needs no
+rebuild:
+
+```powershell
+.\build_model_library.ps1            # or @root_amet\batch\07_build_models.bat
+.\build_model_library.ps1 -Update    # after a modpack update: only what changed
+```
+
+The mod folders it scans are listed at the top of the script. It reads the PBOs
+in place — nothing is unpacked, and Arma does not need to be running or even
+installed. The result is one `releases\models_library-<stamp>.zip`; extract it on
+the planner host so it provides `models3d/library.sqlite`, restart the planner,
+and check it with `python -m warlords.inspect --models`.
+
+Expect roughly 200 KB per model, so a full modpack library runs to about a
+gigabyte. If that is too much to upload, raise `minExtent` in
+`tools/model_filter.json` to drop more small props.
+
 Both steps pack each world's raster tiles (`tiles\<variant>\<z>\<x>\<y>.<ext>`) into a single `{world}\tiles.sqlite`, which is the format the JSOC-OPS-Warlords planner reads. Shipping one file per world instead of hundreds of thousands of loose tiles keeps planner builds, uploads and git fast. Add `--loose` to either step to ship the loose `tiles\` folders instead.
 
 ## Exporting several terrains automatically
@@ -211,6 +236,13 @@ When `release.ps1` starts, it refreshes `PATH` and checks common installation lo
 Every run of `release.ps1` or `release.sh` clears and recreates `release.log` in the repository root. The log contains dependency checks, compiler output, HEMTT output, and the final exit status.
 
 `release.ps1 -Clean` reuses an existing `ocap_exporter_x64.dll`. Use `release.ps1 -RebuildOcapDll` to force the Go/cgo rebuild. `-NoRebuildOcapDll` skips the OCAP rebuild even when the DLL is missing.
+
+The model-library tool (`ramet_models`) is a separate CMake target and is not
+part of `release.ps1`, because it is a build-host utility rather than something
+that ships in the mod. `build_model_library.ps1` builds it on demand, or build it
+directly with `cmake --build --preset ninja-msvc-release --target ramet_models`
+from `subprojects/grad_meh`. It needs only Visual Studio, CMake, Ninja and Rust —
+none of GDAL, OpenImageIO, PCL or Boost.
 
 ## Project documentation
 

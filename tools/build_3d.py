@@ -39,32 +39,10 @@ DEFAULT_MESH_BUDGET = 20000
 
 OBJECT_DTYPE = np.dtype([("model", "<u4"), ("t", "<f4", (12,))])
 
-_TREE = {"tree", "small tree"}
-_BUSH = {"bush"}
-_ROCK = {"rock", "rocks"}
-_WALL = {"wall", "fence"}
-_BUILDING = {"house", "building", "bunker", "chapel", "church", "fortress", "fuelstation",
-             "hospital", "lighthouse", "ruin", "stack", "tourism", "transmitter",
-             "view-tower", "watertower", "busstop", "quay", "powersolar", "powerwave",
-             "powerwind", "shipwreck", "fountain", "cross"}
-
-
-def _category(map_type: str, path: str) -> str:
-    t = (map_type or "").strip().lower()
-    if t in _TREE:
-        return "tree"
-    if t in _BUSH:
-        return "bush"
-    if t in _ROCK:
-        return "rock"
-    if t in _WALL:
-        return "wall"
-    if t in _BUILDING:
-        return "building"
-    p = path.lower().replace("/", "\\")
-    if "\\vegetation" in p or "\\plants" in p or "\\tree" in p:
-        return "tree" if "\\bush" not in p else "bush"
-    return "other"
+try:
+    from model_category import categorise as _category
+except ImportError:  # running as a package / from another directory
+    from tools.model_category import categorise as _category
 
 
 def _read_dem(path: Path) -> tuple[np.ndarray, float]:

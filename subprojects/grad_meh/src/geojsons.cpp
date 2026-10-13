@@ -1,6 +1,7 @@
 #include "geojsons.h"
 
 #include "area.h"
+#include "model_extract.h"
 #include "objects3d.h"
 
 void writeLocations(const std::string& worldName, std::filesystem::path& basePathGeojson)
@@ -900,9 +901,6 @@ void writeGeojsons(arma_file_formats::cxx::OprwCxx& wrp, std::filesystem::path& 
                 pboMap.emplace(pboPath, std::move(arma_file_formats::cxx::create_pbo_reader_path(pboPath.string())));
             }
 
-            int rvffIndex = -1;
-            int affIndex = -1;
-
             auto p3dData = pboMap.find(pboPath)->second->get_entry_data(modelPath);
 
             if (p3dData.empty()) {
@@ -920,63 +918,24 @@ void writeGeojsons(arma_file_formats::cxx::OprwCxx& wrp, std::filesystem::path& 
             }
 
             auto odol_reader = arma_file_formats::cxx::create_odol_lazy_reader_vec(p3dData);
-            auto odol2 = odol_reader->get_odol();
-            setModel3DBounds(models3d[i], odol2);
 
-            arma_file_formats::cxx::LodCxx lod = {};
+            // Bounds, visual mesh and the "map" property are read the same way
+            // here and in the standalone model library tool.
+            const auto extracted = extractModel(models3d[i], *odol_reader);
 
-            bool foundGeoLod = false;
-            bool foundMemoryLod = false;
-            bool foundVisualLod = false;
-            for (auto& res : odol2.resolutions)
+            if (extracted.hasGeometryLod && extracted.hasMapType)
             {
-                if (res.res == arma_file_formats::cxx::ResolutionEnumCxx::Geometry) {
-                    foundGeoLod = true;
-                }
-                else if (res.res == arma_file_formats::cxx::ResolutionEnumCxx::Memory) {
-                    foundMemoryLod = true;
-                }
-                else if (res.res == arma_file_formats::cxx::ResolutionEnumCxx::GraphicalLod) {
-                    foundVisualLod = true;
-                }
-            }
+                auto lod = extracted.geometryLod;
 
-            // The 3D planner view wants the shape players actually see. read_lod
-            // returns the first resolution of the requested kind, which for
-            // GraphicalLod is the most detailed visual LOD. The Geometry LOD is
-            // only a collision hull — usable as a fallback, but boxy.
-            if (foundVisualLod)
-            {
-                auto visualLod = odol_reader->read_lod(arma_file_formats::cxx::ResolutionEnumCxx::GraphicalLod);
-                setModel3DMesh(models3d[i], visualLod);
-            }
-
-            if (foundGeoLod)
-            {
-                lod = odol_reader->read_lod(arma_file_formats::cxx::ResolutionEnumCxx::Geometry);
-                rvffIndex = 1;
-                if (models3d[i].indices.empty()) {
-                    setModel3DMesh(models3d[i], lod);
+                const auto& val = extracted.rawMapType;
+                if ((val == "railway" || val == "road" || val == "track" || val == "main road") && extracted.hasMemoryLod) {
+                    // Roads are drawn in 2D from their Memory LOD points; the 3D
+                    // mesh is left alone, because a point set has no surface to render.
+                    lod = odol_reader->read_lod(arma_file_formats::cxx::ResolutionEnumCxx::Memory);
                 }
 
-                for (auto& prop : lod.named_properties) {
-                    if (static_cast<std::string>(prop.property) == "map")
-                    {
-                        auto val = static_cast<std::string>(prop.value);
-                        models3d[i].mapType = boost::algorithm::to_lower_copy(val);
-                        if ((val == "railway" || val == "road" || val == "track" || val == "main road") && foundMemoryLod) {
-                            // Roads are drawn in 2D from their Memory LOD points;
-                            // the 3D mesh above is left alone, because a point set
-                            // has no surface to render.
-                            lod = odol_reader->read_lod(arma_file_formats::cxx::ResolutionEnumCxx::Memory);
-                            rvffIndex = 2;
-                        }
-
-                        modelMapTypes[i] = { static_cast<std::string>(val), lod };
-                        modelInfos[i] = lod;
-                        break;
-                    }
-                }
+                modelMapTypes[i] = { val, lod };
+                modelInfos[i] = lod;
             }
         }
         catch (const rust::Error& ex) {

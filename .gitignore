@@ -60,6 +60,8 @@ subprojects/ocap-renderterrain/reference_files/
 subprojects/grad_meh/build/
 subprojects/grad_meh/install/bin
 releases/@root_amet
+# Output of build_model_library.ps1: the 3D model library and its staging files.
+model_library/
 
 # Allow git to look into the subprojects directory structure
 !subprojects/

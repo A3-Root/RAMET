@@ -48,3 +48,6 @@ set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 set(CMAKE_CONFIGURATION_TYPES "Debug;Release" CACHE STRING "" FORCE)
 
 add_subdirectory(src)
+
+# Must come after src: the rust-lib cxx bridge target is defined there.
+add_subdirectory(tools_cli)

@@ -1,0 +1,35 @@
+{
+  "_comment": [
+    "Which modpack models go into the planner's 3D library. Edit this instead of rebuilding the tool.",
+    "'exclude' entries are matched as substrings against the model's logical path, lower case,",
+    "with backslashes and a leading backslash (so '\\weapons\\' also matches a top-level weapons folder).",
+    "minExtent drops anything whose largest visual bounding-box side is under that many metres,",
+    "which is what removes the bulk of gear: a soldier body is ~1.8 m, a helmet ~0.3 m."
+  ],
+  "minExtent": 1.0,
+  "meshBudget": 20000,
+  "voxelSize": 0.5,
+  "exclude": [
+    "\\weapons\\",
+    "\\weapons_f\\",
+    "\\weapons2\\",
+    "\\magazines\\",
+    "\\ammo\\",
+    "\\optics\\",
+    "\\headgear\\",
+    "\\helmets\\",
+    "\\vests\\",
+    "\\backpacks\\",
+    "\\uniforms\\",
+    "\\gear\\",
+    "\\proxies\\",
+    "\\proxy\\",
+    "\\anims\\",
+    "\\ui\\",
+    "\\data\\lightsource",
+    "_volume",
+    "_lightsource",
+    "\\dummy",
+    "\\editorpreviews\\"
+  ]
+}

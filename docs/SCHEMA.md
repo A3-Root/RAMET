@@ -153,6 +153,57 @@ Written by `tools/build_3d.py` from the DEM and the grad_meh `3d/` export
   Schema `ramet-3d-1` had the mesh stream only, taken from the Geometry LOD, and
   no voxel fields. Readers should treat the voxel fields as absent there.
 
+## Model library (`ramet-models-1`)
+
+A **map-independent** store of model geometry, separate from everything above.
+`terrain3d` only covers models a world's terrain places; a mission's own
+vehicles, units and Zeus-placed buildings are in no terrain at all, so the
+planner had no geometry for them and drew bounding boxes.
+
+Built by `build_model_library.ps1` → `tools/build_models.py` → the native
+`ramet_models` tool, straight from the modpack's PBOs. **No Arma and no
+unpacking**: the p3d reader opens each `.pbo` and decompresses the entries it
+wants. The planner is a separate, isolated server, so the output travels there
+as a zip the admin extracts — the same way world tiles do.
+
+Zip layout, which extracts straight into the planner's data directory:
+
+```
+models3d/library.sqlite
+models3d/manifest.json
+```
+
+`library.sqlite`:
+
+| Table | Contents |
+| --- | --- |
+| `meta` | `schema`, `builtAt`, `modelCount`, `voxelMaxSize`, `meshTriangleBudget`, `minExtent`, `modRoots` |
+| `models` | one row per model, keyed by `path` |
+| `failures` | models that were skipped or failed, with the reason |
+
+A `models` row carries `path` (lower case, backslashes, no leading separator —
+the same key the Zeus export reports per object), `digest` (SHA-1 of `path`,
+used in the mesh URL), `category`, `map_type`, `bbox_min`/`bbox_max`,
+`voxel_size`, and two blobs in the same layout as `models.bin` — float32 xyz
+vertices followed by uint32 indices:
+
+| Blob | Counts | Source |
+| --- | --- | --- |
+| `voxel_blob` | `voxel_vertex_count`, `voxel_index_count` | blocky proxy, cell size scaled per model (`extent / 32`, clamped to 0.08–0.5 m) |
+| `mesh_blob` | `mesh_vertex_count`, `mesh_index_count`, `mesh_decimated` | the most detailed visual LOD, vertex-clustered down to the triangle budget when it is over it |
+
+Unlike the terrain pack, the library uses one voxel cell size **per model**
+rather than a fixed 0.5 m: it holds crates and rifle-sized props as well as
+buildings, and at 0.5 m a 1.5 m crate voxelises to two or three quads.
+
+`source_pbo`/`source_stamp` record where a model came from and the size and
+mtime of that PBO, which is how `-Update` rebuilds only what a modpack update
+changed. `failures` rows carry the same stamp, so a model skipped for being
+tiny or for being an unbinarised MLOD is not re-read on every update.
+
+The planner serves slices of this, never the whole file — see
+`server/warlords/models3d.py` and the `/models3d/` routes.
+
 ## `source.json`
 
 Companion provenance file:
