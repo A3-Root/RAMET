@@ -20,6 +20,8 @@ param(
     # Extra or replacement mod directories. Without this the list below is used.
     [string[]]$ModRoot = @(),
     [switch]$Update,
+    # Skip the base game and DLC folders, building from the modpack alone.
+    [switch]$SkipVanilla,
     [switch]$SkipZip,
     [switch]$RebuildTool,
     [string]$Arma3Root,
@@ -42,6 +44,26 @@ $DefaultModFolders = @(
     "@77th_ops",
     "@77th_optional",
     "@77th_unit"
+)
+
+# Base game and DLC content, scanned unless -SkipVanilla is passed. Missions
+# place plenty of vanilla objects — crates, barriers, vanilla vehicles,
+# infantry — and without these they render as bounding boxes. (Terrain-placed
+# vanilla buildings are unaffected: those come from each map's own 3D pack.)
+$VanillaFolders = @(
+    "Addons",
+    "Expansion\Addons",
+    "Argo\Addons",
+    "Contact\Addons",
+    "Curator\Addons",
+    "Enoch\Addons",
+    "Heli\Addons",
+    "Jets\Addons",
+    "Kart\Addons",
+    "Mark\Addons",
+    "Orange\Addons",
+    "Tacops\Addons",
+    "Tank\Addons"
 )
 
 $logPath = Join-Path $root "build_model_library.log"
@@ -178,6 +200,16 @@ if ($ModRoot.Count -gt 0) {
             $modRoots += $candidate
         } else {
             Write-Warning "Mod folder not found, skipping: $candidate"
+        }
+    }
+    if ($SkipVanilla) {
+        Write-Host "  skipping base game and DLC content by request" -ForegroundColor DarkGray
+    } else {
+        foreach ($folder in $VanillaFolders) {
+            $candidate = Join-Path $armaRoot $folder
+            if (Test-Path $candidate -PathType Container) {
+                $modRoots += $candidate
+            }
         }
     }
 }

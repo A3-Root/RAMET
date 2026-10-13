@@ -138,15 +138,24 @@ rebuild:
 .\build_model_library.ps1 -Update    # after a modpack update: only what changed
 ```
 
-The mod folders it scans are listed at the top of the script. It reads the PBOs
-in place — nothing is unpacked, and Arma does not need to be running or even
-installed. The result is one `releases\models_library-<stamp>.zip`; extract it on
-the planner host so it provides `models3d/library.sqlite`, restart the planner,
-and check it with `python -m warlords.inspect --models`.
+The mod folders it scans are listed at the top of the script, together with the
+base game and DLC folders — missions place plenty of vanilla crates, barriers and
+vehicles, and without those they would render as boxes. Pass `-SkipVanilla` to
+build from the modpack alone. It reads the PBOs in place — nothing is unpacked,
+and Arma does not need to be running or even installed. The result is one
+`releases\models_library-<stamp>.zip`; extract it on the planner host so it
+provides `models3d/library.sqlite`, restart the planner, and check it with
+`python -m warlords.inspect --models`.
 
-Expect roughly 200 KB per model, so a full modpack library runs to about a
-gigabyte. If that is too much to upload, raise `minExtent` in
-`tools/model_filter.json` to drop more small props.
+Expect roughly 150 KB per model. A full modpack plus base game runs to a couple
+of gigabytes; the 77th modpack alone is about 1.6 GB for 10,689 models. If that
+is too much to upload, raise `minExtent` in `tools/model_filter.json` to drop
+more small props.
+
+A few percent of models fail to read — the p3d reader rejects some files
+outright and hard-aborts on a handful more. Each failure is recorded in the
+library's `failures` table and the run continues, so this is expected rather
+than a problem to chase.
 
 Both steps pack each world's raster tiles (`tiles\<variant>\<z>\<x>\<y>.<ext>`) into a single `{world}\tiles.sqlite`, which is the format the JSOC-OPS-Warlords planner reads. Shipping one file per world instead of hundreds of thousands of loose tiles keeps planner builds, uploads and git fast. Add `--loose` to either step to ship the loose `tiles\` folders instead.
 
