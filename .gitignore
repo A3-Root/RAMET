@@ -62,6 +62,7 @@ subprojects/grad_meh/install/bin
 releases/@root_amet
 # Output of build_model_library.ps1: the 3D model library and its staging files.
 model_library/
+releases/models_library*.zip
 
 # Allow git to look into the subprojects directory structure
 !subprojects/
