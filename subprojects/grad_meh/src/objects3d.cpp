@@ -6,6 +6,7 @@
 #include <atomic>
 #include <fstream>
 #include <thread>
+#include <cctype>
 #include <utility>
 
 #include <nlohmann/json.hpp>
@@ -29,6 +30,16 @@ namespace {
 // map a section back to the faces it owns. Verified against every section of a
 // character (6801 triangles, 108816 bytes), a tree (6 quads, 120 bytes) and a
 // building with both (200 triangles + 104 quads, 5280 bytes).
+// No boost in the standalone library tool, so no to_lower_copy here.
+std::string toLowerAscii(const std::string& value)
+{
+    std::string out = value;
+    for (auto& c : out) {
+        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    }
+    return out;
+}
+
 size_t faceBytes(const arma_file_formats::cxx::LodFaceCxx& face)
 {
     return 4 + face.vertex_indices.size() * 4;
@@ -56,8 +67,19 @@ std::vector<std::pair<uint32_t, uint32_t>> proxyFaceRanges(
         const auto& section = lod.sections[static_cast<size_t>(proxy.section_index)];
         // Only a section that textures nothing is a pure placeholder section; a
         // proxy pointing into a real one must not take the geometry with it.
-        if (section.common_texture_index >= 0 || section.material_index >= 0) {
-            continue;
+        // "Textures nothing" is either no texture at all (index -1, which is how
+        // A3 characters store it) or an entry that names no file: vehicles point
+        // at a real index whose string is empty, and some mods leave the proxy's
+        // own path there.
+        if (section.common_texture_index >= 0) {
+            const auto index = static_cast<size_t>(section.common_texture_index);
+            if (index >= lod.textures.size()) {
+                continue;
+            }
+            const std::string texture = toLowerAscii(static_cast<std::string>(lod.textures[index]));
+            if (!texture.empty() && texture.rfind("proxy:", 0) != 0) {
+                continue;
+            }
         }
         const std::pair<uint32_t, uint32_t> range{section.face_lower_index,
                                                   section.face_upper_index};

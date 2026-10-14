@@ -31,6 +31,7 @@ from raster_transform import (
     WorldMeta,
     count_tiles,
     output_pixel_size,
+    resample_source,
     world_to_pixel,
 )
 
@@ -102,22 +103,33 @@ def _render_source(
     wm = WorldMeta(world_size_m=float(world_size), src_extent_m=float(src_extent_m))
     out_px = output_pixel_size(wm, source_width_px=src.width)
 
-    # Resize source so 1 source-pixel == `world_size_m / out_px` metres on the output grid.
-    target_src_px = max(1, int(round(out_px * (src_extent_m / float(world_size)))))
-    if src.width != target_src_px:
-        src = src.resize((target_src_px, target_src_px), Image.BILINEAR)
-
-    # Map GMS origin (top-left of source img) to RAMET world coord.
-    origin_x = float(index.get("OriginX") or 0.0)
-    origin_y = float(index.get("OriginY") or 0.0)
-    # GMS OriginY = -worldSize (bottom-left in world coords); the source covers
-    # world rect [0, src_extent_m] x [0, src_extent_m] for default a3 maps.
-    world_x_left = -origin_x
-    world_y_top = origin_y + src_extent_m  # convert from GMS origin convention
-
-    canvas = Image.new("RGBA", (out_px, out_px), (0, 0, 0, 0))
-    px_tl, py_tl = world_to_pixel(world_x_left, world_y_top, wm, out_px)
-    canvas.paste(src, (int(round(px_tl)), int(round(py_tl))), src)
+    # The source covers the whole terrain, so it is scaled to its own extent and
+    # placed at the world's north-west corner, exactly like the sat and topo
+    # rasters.
+    #
+    # GMS's index.json also carries OriginX / OriginY, and those are *not* an
+    # image offset: they are the terrain's grid-reference origin, which is why
+    # Maksniemi reports 79000 (a Finnish grid northing) for an 11 km map. Taking
+    # them as a paste offset is what broke every map whose author set one —
+    # Jumo, Al Salman, Maksniemi and Straya were pushed off the canvas entirely
+    # and came out blank, while Douglas County, Project America, Twin Lakes and
+    # both Zagorsk maps lost exactly the fraction of the map the offset shifted
+    # them by. Every world that reported 0 was unaffected, which is why this
+    # went unnoticed.
+    #
+    # A map that genuinely needs nudging can say so in world_overrides.json
+    # (`offsetEast` / `offsetNorth`, in metres, north-east positive).
+    offset_east = float(overrides.get("offsetEast", 0.0) or 0.0)
+    offset_north = float(overrides.get("offsetNorth", 0.0) or 0.0)
+    if offset_east or offset_north:
+        target_src_px = max(1, int(round(out_px * (src_extent_m / float(world_size)))))
+        if src.width != target_src_px:
+            src = src.resize((target_src_px, target_src_px), Image.BILINEAR)
+        canvas = Image.new("RGBA", (out_px, out_px), (0, 0, 0, 0))
+        px, py = world_to_pixel(offset_east, offset_north + src_extent_m, wm, out_px)
+        canvas.paste(src, (int(round(px)), int(round(py))), src)
+    else:
+        canvas = resample_source(src, wm, out_px)
 
     target = out_tiles / layer_id
     write_pyramid(canvas, target, fmt="png")

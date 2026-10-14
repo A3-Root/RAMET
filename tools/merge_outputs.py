@@ -21,6 +21,8 @@ import shutil
 from pathlib import Path
 from typing import Any
 
+import normalize_pyramid
+
 # Variant subdir names in the OCAP raw stage map to canonical manifest IDs.
 OCAP_VARIANT_DIRS = {
     "topoDark": "topo_dark",
@@ -46,6 +48,11 @@ def _copy_pyramid(src: Path, dst: Path) -> bool:
     for child in src.iterdir():
         if child.is_dir() and child.name.isdigit():
             shutil.copytree(child, dst / child.name)
+    # ocap renders at its own pixel scale, which leaves a partial tile grid for
+    # any world whose size is not a power of two. The planner maps the full 2^z
+    # grid onto the world, so such a layer is drawn the wrong size next to every
+    # raster RAMET renders itself.
+    normalize_pyramid.normalise(dst, "png")
     return True
 
 

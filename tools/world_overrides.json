@@ -1,5 +1,5 @@
 {
-  "_doc": "Per-world overrides for ingame pipeline. worldSizeSource: 'gms' | 'grad_meh'. scaleFactor multiplies GMS world coords into RAMET world coords.",
+  "_doc": "Per-world overrides for ingame pipeline. worldSizeSource: 'gms' | 'grad_meh'. scaleFactor multiplies GMS world coords into RAMET world coords. offsetEast/offsetNorth shift the in-game raster on the world grid, in metres, north-east positive — leave them out unless a map's export really is offset. GMS's own OriginX/OriginY are a grid-reference origin, not an image offset, and are deliberately ignored.",
   "_default": {
     "worldSizeSource": "grad_meh",
     "scaleFactor": 1.0
