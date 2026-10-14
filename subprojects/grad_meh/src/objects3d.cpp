@@ -6,6 +6,7 @@
 #include <atomic>
 #include <fstream>
 #include <thread>
+#include <utility>
 
 #include <nlohmann/json.hpp>
 #include <plog/Log.h>
@@ -20,20 +21,96 @@ void setModel3DBounds(Model3D& model, const arma_file_formats::cxx::ODOLCxx& odo
     model.bboxMax = {info.bbox_max_visual.x, info.bbox_max_visual.y, info.bbox_max_visual.z};
 }
 
+namespace {
+
+// Bytes one face occupies in the LOD's face block: a 4-byte type field followed
+// by one uint32 per corner. Sections address faces by byte offset into that
+// block, not by face number, so walking the faces in order is the only way to
+// map a section back to the faces it owns. Verified against every section of a
+// character (6801 triangles, 108816 bytes), a tree (6 quads, 120 bytes) and a
+// building with both (200 triangles + 104 quads, 5280 bytes).
+size_t faceBytes(const arma_file_formats::cxx::LodFaceCxx& face)
+{
+    return 4 + face.vertex_indices.size() * 4;
+}
+
+// Byte ranges of the sections that only hold proxy placeholders.
+//
+// A proxy (a head, a weapon, a crew position, a wheel) is stored as a single 2 m
+// placeholder triangle that the engine swaps for another model at runtime. The
+// LOD groups them all into their own section, which every proxy points at, and
+// that section carries no texture or material. Drawn as-is the placeholders are
+// loose triangles sticking out of soldiers and vehicles, and they inflate the
+// model's bounding box past the shape players see — an A3 character measures
+// 4.6 m across with its 17 proxies in, against 1.6 m without them, which also
+// threw off how far the planner lifted it off the ground.
+std::vector<std::pair<uint32_t, uint32_t>> proxyFaceRanges(
+    const arma_file_formats::cxx::LodCxx& lod)
+{
+    std::vector<std::pair<uint32_t, uint32_t>> out;
+    const auto sectionCount = static_cast<int32_t>(lod.sections.size());
+    for (const auto& proxy : lod.proxies) {
+        if (proxy.section_index < 0 || proxy.section_index >= sectionCount) {
+            continue;
+        }
+        const auto& section = lod.sections[static_cast<size_t>(proxy.section_index)];
+        // Only a section that textures nothing is a pure placeholder section; a
+        // proxy pointing into a real one must not take the geometry with it.
+        if (section.common_texture_index >= 0 || section.material_index >= 0) {
+            continue;
+        }
+        const std::pair<uint32_t, uint32_t> range{section.face_lower_index,
+                                                  section.face_upper_index};
+        if (std::find(out.begin(), out.end(), range) == out.end()) {
+            out.push_back(range);
+        }
+    }
+    return out;
+}
+
+bool inRanges(const std::vector<std::pair<uint32_t, uint32_t>>& ranges, size_t offset)
+{
+    for (const auto& range : ranges) {
+        if (offset >= range.first && offset < range.second) {
+            return true;
+        }
+    }
+    return false;
+}
+
+} // namespace
+
 void setModel3DMesh(Model3D& model, const arma_file_formats::cxx::LodCxx& geometryLod)
 {
     model.vertices.clear();
     model.indices.clear();
-    model.vertices.reserve(geometryLod.vertices.size() * 3);
-    for (const auto& v : geometryLod.vertices) {
-        model.vertices.push_back(v.x);
-        model.vertices.push_back(v.y);
-        model.vertices.push_back(v.z);
-    }
+
     const auto vertexCount = static_cast<uint32_t>(geometryLod.vertices.size());
+    const auto proxyRanges = proxyFaceRanges(geometryLod);
+    size_t faceOffset = 0;
+
+    // Keep only the vertices the surviving faces actually use, so the vertex
+    // array, the index array and the bounding box all describe one shape.
+    std::vector<uint32_t> remap(vertexCount, UINT32_MAX);
+    const auto emit = [&](uint32_t source) {
+        if (remap[source] == UINT32_MAX) {
+            remap[source] = static_cast<uint32_t>(model.vertices.size() / 3);
+            const auto& v = geometryLod.vertices[source];
+            model.vertices.push_back(v.x);
+            model.vertices.push_back(v.y);
+            model.vertices.push_back(v.z);
+        }
+        model.indices.push_back(remap[source]);
+    };
+
     for (const auto& face : geometryLod.faces) {
         const auto& idx = face.vertex_indices;
+        const auto offset = faceOffset;
+        faceOffset += faceBytes(face);
         if (idx.size() < 3) {
+            continue;
+        }
+        if (inRanges(proxyRanges, offset)) {
             continue;
         }
         // Faces are convex polygons (triangles or quads); fan-triangulate.
@@ -41,14 +118,33 @@ void setModel3DMesh(Model3D& model, const arma_file_formats::cxx::LodCxx& geomet
             if (idx[0] >= vertexCount || idx[i] >= vertexCount || idx[i + 1] >= vertexCount) {
                 continue;
             }
-            model.indices.push_back(idx[0]);
-            model.indices.push_back(idx[i]);
-            model.indices.push_back(idx[i + 1]);
+            emit(idx[0]);
+            emit(idx[i]);
+            emit(idx[i + 1]);
         }
     }
     if (model.indices.empty()) {
         model.vertices.clear();
+        return;
     }
+    setModel3DBoundsFromMesh(model);
+}
+
+void setModel3DBoundsFromMesh(Model3D& model)
+{
+    if (model.vertices.size() < 3) {
+        return;
+    }
+    std::array<float, 3> lo = {model.vertices[0], model.vertices[1], model.vertices[2]};
+    std::array<float, 3> hi = lo;
+    for (size_t i = 0; i + 2 < model.vertices.size(); i += 3) {
+        for (size_t a = 0; a < 3; a++) {
+            lo[a] = std::min(lo[a], model.vertices[i + a]);
+            hi[a] = std::max(hi[a], model.vertices[i + a]);
+        }
+    }
+    model.bboxMin = lo;
+    model.bboxMax = hi;
 }
 
 void setModel3DVoxels(Model3D& model, float targetVoxelSize)

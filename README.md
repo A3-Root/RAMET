@@ -147,15 +147,28 @@ and Arma does not need to be running or even installed. The result is one
 provides `models3d/library.sqlite`, restart the planner, and check it with
 `python -m warlords.inspect --models`.
 
-Expect roughly 150 KB per model. A full modpack plus base game runs to a couple
-of gigabytes; the 77th modpack alone is about 1.6 GB for 10,689 models. If that
-is too much to upload, raise `minExtent` in `tools/model_filter.json` to drop
-more small props.
+Expect roughly 170 KB per model. The 77th modpack plus the base game and DLC
+currently builds 22,414 models into 3.7 GB (1.6 GB voxel, 2.1 GB mesh) from
+23,177 candidates, with nothing decimated — `meshBudget` is 400,000 triangles
+and the largest model in the modpack is 305,000. Size is not normally worth
+optimising: this is a one-off build pushed to the planner once, and what a
+browser downloads per plan is the voxel bundle (4.4 MB for a 119-model mission),
+with meshes fetched one model at a time in detailed mode (0.5–1.8 MB each for
+vehicles). If a build does need to be smaller, raise `minExtent` in
+`tools/model_filter.json` to drop more small props; lowering it does the
+opposite, and 0.05 m keeps everything a mission can place, including the
+barrels, chairs, sacks and crates that looked like orange boxes at 1.0 m.
 
-A few percent of models fail to read — the p3d reader rejects some files
-outright and hard-aborts on a handful more. Each failure is recorded in the
-library's `failures` table and the run continues, so this is expected rather
-than a problem to chase.
+Some models fail to read — the p3d reader rejects some files outright and
+hard-aborts on a handful more. Each failure is recorded in the library's
+`failures` table with the reason, and the run continues, so this is expected
+rather than a problem to chase. Of the 763 in the current build, 453 are not
+errors at all — models with no usable mesh, MLOD files, or props under
+`minExtent` — and the rest are files the p3d reader rejects.
+
+The `exclude` list is matched as a plain substring, so it is blunter than it
+looks: `\weapons\` also drops `ca\weapons\ammoboxes\`, which is why a few CUP
+ammo crates render as boxes. They are box-shaped, so this has been left alone.
 
 Both steps pack each world's raster tiles (`tiles\<variant>\<z>\<x>\<y>.<ext>`) into a single `{world}\tiles.sqlite`, which is the format the JSOC-OPS-Warlords planner reads. Shipping one file per world instead of hundreds of thousands of loose tiles keeps planner builds, uploads and git fast. Add `--loose` to either step to ship the loose `tiles\` folders instead.
 

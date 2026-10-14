@@ -137,7 +137,11 @@ Written by `tools/build_3d.py` from the DEM and the grad_meh `3d/` export
 
   Each model carries up to two geometry streams in `3d/models.bin`, both stored
   as float32 xyz vertices followed by uint32 triangle indices in model space
-  (x right, y up, z forward):
+  (x right, y up, z forward). `bboxMin`/`bboxMax` are the box of the geometry
+  that was actually kept, which is not the model's `bbox_min_visual`: proxy
+  placeholders are dropped (see the model library below) and vertices no face
+  uses are not written, so the box, the vertices and the indices always describe
+  one shape:
 
   | Stream | Offsets | Source |
   | --- | --- | --- |
@@ -191,6 +195,17 @@ vertices followed by uint32 indices:
 | --- | --- | --- |
 | `voxel_blob` | `voxel_vertex_count`, `voxel_index_count` | blocky proxy, cell size scaled per model (`extent / 32`, clamped to 0.08–0.5 m) |
 | `mesh_blob` | `mesh_vertex_count`, `mesh_index_count`, `mesh_decimated` | the most detailed visual LOD, vertex-clustered down to the triangle budget when it is over it |
+
+**Proxy placeholders are not in either blob.** A proxy — a head, a weapon, a
+crew position, a wheel — is stored in the LOD as one 2 m triangle the engine
+swaps for another model at runtime, and the LOD groups them all into a section
+with no texture and no material that every proxy points at. Drawn as-is they are
+loose triangles over soldiers and vehicles, and they stretch the bounding box:
+an A3 character measures 4.6 m across with its 17 proxies in and 1.6 m without,
+which also decided how far the planner lifted it off the ground. `bbox_min`/
+`bbox_max` are therefore measured on the kept geometry, after decimation, not
+copied from the model's `bbox_min_visual`, and `minExtent` is applied to that
+same box.
 
 Unlike the terrain pack, the library uses one voxel cell size **per model**
 rather than a fixed 0.5 m: it holds crates and rifle-sized props as well as

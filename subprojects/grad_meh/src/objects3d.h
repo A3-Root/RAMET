@@ -34,8 +34,12 @@ constexpr float VOXEL_TARGET_SIZE = 0.5f;
 // Copies the visual bounding box of an ODOL model.
 void setModel3DBounds(Model3D& model, const arma_file_formats::cxx::ODOLCxx& odol);
 
-// Copies and triangulates the faces of a LOD.
+// Copies and triangulates the faces of a LOD, dropping proxy placeholders, and
+// re-derives the bounding box from what is left.
 void setModel3DMesh(Model3D& model, const arma_file_formats::cxx::LodCxx& lod);
+
+// Bounding box of the mesh currently held in the model, in the same model space.
+void setModel3DBoundsFromMesh(Model3D& model);
 
 // Builds the blocky proxy for one model from its triangulated mesh.
 void setModel3DVoxels(Model3D& model, float targetVoxelSize = VOXEL_TARGET_SIZE);

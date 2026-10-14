@@ -72,6 +72,7 @@ ExtractResult extractModel(Model3D& model, arma_file_formats::cxx::OdolLazyReade
             model.indices = std::move(reduced.indices);
             result.meshDecimated = true;
             result.meshCellSize = reduced.cellSize;
+            setModel3DBoundsFromMesh(model);
         }
     }
 
